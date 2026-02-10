@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,18 +42,57 @@ const pairs = [
   { pair: "XRP/USDT", price: "2.41", change: "+5.12%" },
 ];
 
+const TradingViewChart = ({ symbol = "BINANCE:BTCUSDT" }: { symbol?: string }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    containerRef.current.innerHTML = "";
+
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true,
+      symbol,
+      interval: "15",
+      timezone: "Etc/UTC",
+      theme: "light",
+      style: "1",
+      locale: "en",
+      hide_side_toolbar: false,
+      allow_symbol_change: true,
+      support_host: "https://www.tradingview.com",
+    });
+
+    containerRef.current.appendChild(script);
+  }, [symbol]);
+
+  return (
+    <div className="tradingview-widget-container h-full" ref={containerRef}>
+      <div className="tradingview-widget-container__widget h-full" />
+    </div>
+  );
+};
+
 export default function Trade() {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState("limit");
   const [price, setPrice] = useState("97,245.30");
   const [amount, setAmount] = useState("");
+  const [selectedPair, setSelectedPair] = useState("BINANCE:BTCUSDT");
 
   return (
     <div className="container py-4">
       {/* Header */}
       <div className="flex items-center gap-6 mb-4 pb-4 border-b overflow-x-auto">
         {pairs.map((p) => (
-          <div key={p.pair} className="shrink-0 cursor-pointer">
+          <div
+            key={p.pair}
+            className={`shrink-0 cursor-pointer transition-opacity ${selectedPair === `BINANCE:${p.pair.replace("/", "")}` ? "opacity-100" : "opacity-60 hover:opacity-80"}`}
+            onClick={() => setSelectedPair(`BINANCE:${p.pair.replace("/", "")}`)}
+          >
             <p className="font-semibold text-sm">{p.pair}</p>
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs">${p.price}</span>
@@ -61,6 +100,11 @@ export default function Trade() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* TradingView Chart */}
+      <div className="rounded-lg border overflow-hidden mb-4 h-[500px]">
+        <TradingViewChart symbol={selectedPair} />
       </div>
 
       <div className="grid lg:grid-cols-[1fr,300px,300px] gap-4">
