@@ -3,7 +3,16 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Navbar } from "@/components/Navbar";
 import Index from "./pages/Index";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import KYC from "./pages/KYC";
+import Dashboard from "./pages/Dashboard";
+import Assets from "./pages/Assets";
+import Withdraw from "./pages/Withdraw";
+import Transfer from "./pages/Transfer";
+import Trade from "./pages/Trade";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -14,9 +23,17 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <Navbar />
         <Routes>
           <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/kyc" element={<KYC />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/assets" element={<Assets />} />
+          <Route path="/withdraw" element={<Withdraw />} />
+          <Route path="/transfer" element={<Transfer />} />
+          <Route path="/trade" element={<Trade />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
