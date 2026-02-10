@@ -3,27 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useBinanceOrderBook } from "@/hooks/useBinanceOrderBook";
 
-const orderBook = {
-  asks: [
-    { price: "97,280.50", amount: "0.2341", total: "22,773.58" },
-    { price: "97,275.30", amount: "0.5120", total: "49,804.95" },
-    { price: "97,270.10", amount: "0.1890", total: "18,384.05" },
-    { price: "97,265.00", amount: "0.8450", total: "82,188.93" },
-    { price: "97,260.20", amount: "0.3210", total: "31,220.52" },
-    { price: "97,255.80", amount: "0.1560", total: "15,171.90" },
-    { price: "97,250.00", amount: "0.6780", total: "65,935.50" },
-  ],
-  bids: [
-    { price: "97,245.30", amount: "0.4521", total: "43,964.04" },
-    { price: "97,240.10", amount: "0.3890", total: "37,826.40" },
-    { price: "97,235.50", amount: "0.7120", total: "69,231.68" },
-    { price: "97,230.00", amount: "0.2340", total: "22,751.82" },
-    { price: "97,225.80", amount: "0.5670", total: "55,127.02" },
-    { price: "97,220.10", amount: "0.1230", total: "11,958.07" },
-    { price: "97,215.00", amount: "0.8910", total: "86,618.57" },
-  ],
-};
+// Static order book removed — now using live Binance WebSocket data via useBinanceOrderBook hook
 
 const recentTrades = [
   { price: "97,245.30", amount: "0.0234", time: "14:32:01", up: true },
@@ -114,6 +96,7 @@ export default function Trade() {
   const [price, setPrice] = useState("97,245.30");
   const [amount, setAmount] = useState("");
   const [selectedPair, setSelectedPair] = useState("BINANCE:BTCUSDT");
+  const orderBook = useBinanceOrderBook(selectedPair);
 
   return (
     <div className="container py-4">
