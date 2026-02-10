@@ -35,12 +35,44 @@ const recentTrades = [
   { price: "97,246.80", amount: "0.0120", time: "14:31:43", up: true },
 ];
 
-const pairs = [
-  { pair: "BTC/USDT", price: "97,245.30", change: "+2.34%" },
-  { pair: "ETH/USDT", price: "3,412.18", change: "+1.87%" },
-  { pair: "SOL/USDT", price: "198.45", change: "-0.52%" },
-  { pair: "XRP/USDT", price: "2.41", change: "+5.12%" },
+const pairSymbols = [
+  { pair: "BTC/USDT", symbol: "BINANCE:BTCUSDT" },
+  { pair: "ETH/USDT", symbol: "BINANCE:ETHUSDT" },
+  { pair: "SOL/USDT", symbol: "BINANCE:SOLUSDT" },
+  { pair: "XRP/USDT", symbol: "BINANCE:XRPUSDT" },
 ];
+
+const TradingViewTicker = () => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    containerRef.current.innerHTML = "";
+
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-tickers.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      symbols: pairSymbols.map((p) => ({
+        proName: p.symbol,
+        title: p.pair,
+      })),
+      isTransparent: true,
+      showSymbolLogo: true,
+      colorTheme: "light",
+      locale: "en",
+    });
+
+    containerRef.current.appendChild(script);
+  }, []);
+
+  return (
+    <div className="tradingview-widget-container" ref={containerRef}>
+      <div className="tradingview-widget-container__widget" />
+    </div>
+  );
+};
 
 const TradingViewChart = ({ symbol = "BINANCE:BTCUSDT" }: { symbol?: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -85,20 +117,23 @@ export default function Trade() {
 
   return (
     <div className="container py-4">
-      {/* Header */}
-      <div className="flex items-center gap-6 mb-4 pb-4 border-b overflow-x-auto">
-        {pairs.map((p) => (
-          <div
-            key={p.pair}
-            className={`shrink-0 cursor-pointer transition-opacity ${selectedPair === `BINANCE:${p.pair.replace("/", "")}` ? "opacity-100" : "opacity-60 hover:opacity-80"}`}
-            onClick={() => setSelectedPair(`BINANCE:${p.pair.replace("/", "")}`)}
+      {/* Live TradingView Ticker */}
+      <div className="mb-4 pb-2 border-b">
+        <TradingViewTicker />
+      </div>
+
+      {/* Pair selector */}
+      <div className="flex items-center gap-4 mb-4">
+        {pairSymbols.map((p) => (
+          <button
+            key={p.symbol}
+            onClick={() => setSelectedPair(p.symbol)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              selectedPair === p.symbol ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
           >
-            <p className="font-semibold text-sm">{p.pair}</p>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs">${p.price}</span>
-              <span className={`text-xs font-mono ${p.change.startsWith("+") ? "text-buy" : "text-sell"}`}>{p.change}</span>
-            </div>
-          </div>
+            {p.pair}
+          </button>
         ))}
       </div>
 
