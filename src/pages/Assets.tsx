@@ -42,7 +42,7 @@ export default function Assets() {
 
   return (
     <div className="container py-8 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Assets</h1>
           <p className="text-muted-foreground text-sm">Manage your cryptocurrency portfolio</p>
@@ -180,8 +180,8 @@ export default function Assets() {
       </div>
 
       {/* Bottom status */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground rounded-lg border bg-card px-4 py-3">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground rounded-lg border bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
@@ -189,7 +189,7 @@ export default function Assets() {
             </span>
             Prices updating live
           </div>
-          <div className="flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-buy" /> Funds are SAFU</div>
+          <div className="hidden sm:flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-buy" /> Funds are SAFU</div>
         </div>
         <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> Updated just now</div>
       </div>

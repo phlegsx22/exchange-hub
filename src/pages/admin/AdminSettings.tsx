@@ -15,7 +15,7 @@ export default function AdminSettings() {
   const [defaultCurrency, setDefaultCurrency] = useState("USD");
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
+    <div className="p-4 sm:p-6 space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Settings className="h-6 w-6" /> Platform Settings

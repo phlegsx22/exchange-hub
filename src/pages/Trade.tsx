@@ -99,14 +99,14 @@ export default function Trade() {
   const orderBook = useBinanceOrderBook(selectedPair);
 
   return (
-    <div className="container py-4">
+    <div className="container py-4 space-y-4">
       {/* Live TradingView Ticker */}
-      <div className="mb-4 pb-2 border-b">
+      <div className="pb-2 border-b overflow-x-auto">
         <TradingViewTicker />
       </div>
 
       {/* Pair selector */}
-      <div className="flex items-center gap-4 mb-4">
+      <div className="flex items-center gap-2 flex-wrap">
         {pairSymbols.map((p) => (
           <button
             key={p.symbol}
@@ -121,52 +121,14 @@ export default function Trade() {
       </div>
 
       {/* TradingView Chart */}
-      <div className="rounded-lg border overflow-hidden mb-4 h-[500px]">
+      <div className="rounded-lg border overflow-hidden h-[300px] sm:h-[400px] lg:h-[500px]">
         <TradingViewChart symbol={selectedPair} />
       </div>
 
-      <div className="grid lg:grid-cols-[1fr,300px,300px] gap-4">
-        {/* Order Book */}
-        <div className="rounded-lg border overflow-hidden">
-          <div className="bg-muted/50 px-4 py-2 border-b">
-            <h3 className="text-sm font-semibold">Order Book</h3>
-          </div>
-          <div className="grid grid-cols-[1fr,1fr] divide-x text-xs">
-            {/* Asks */}
-            <div>
-              <div className="grid grid-cols-3 px-3 py-2 text-muted-foreground border-b">
-                <span>Price</span>
-                <span className="text-right">Amount</span>
-                <span className="text-right">Total</span>
-              </div>
-              {orderBook.asks.map((a, i) => (
-                <div key={i} className="grid grid-cols-3 px-3 py-1.5 hover:bg-muted/30 font-mono">
-                  <span className="text-sell">{a.price}</span>
-                  <span className="text-right">{a.amount}</span>
-                  <span className="text-right text-muted-foreground">{a.total}</span>
-                </div>
-              ))}
-            </div>
-            {/* Bids */}
-            <div>
-              <div className="grid grid-cols-3 px-3 py-2 text-muted-foreground border-b">
-                <span>Price</span>
-                <span className="text-right">Amount</span>
-                <span className="text-right">Total</span>
-              </div>
-              {orderBook.bids.map((b, i) => (
-                <div key={i} className="grid grid-cols-3 px-3 py-1.5 hover:bg-muted/30 font-mono">
-                  <span className="text-buy">{b.price}</span>
-                  <span className="text-right">{b.amount}</span>
-                  <span className="text-right text-muted-foreground">{b.total}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Order Form */}
-        <div className="rounded-lg border p-4 space-y-4">
+      {/* Order Form first on mobile for usability */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr,300px,300px] gap-4">
+        {/* Order Form - shown first on mobile via order */}
+        <div className="rounded-lg border p-4 space-y-4 order-first lg:order-none">
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
             <button
               onClick={() => setSide("buy")}
@@ -204,7 +166,6 @@ export default function Trade() {
               <Label className="text-xs">Amount (BTC)</Label>
               <Input placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="font-mono" />
             </div>
-            {/* Percentage buttons */}
             <div className="grid grid-cols-4 gap-2">
               {["25%", "50%", "75%", "100%"].map((pct) => (
                 <Button key={pct} variant="outline" size="sm" className="text-xs">{pct}</Button>
@@ -223,6 +184,45 @@ export default function Trade() {
             <Button className={`w-full ${side === "buy" ? "bg-buy hover:bg-buy/90" : "bg-sell hover:bg-sell/90"}`} size="lg">
               {side === "buy" ? "Buy" : "Sell"} BTC
             </Button>
+          </div>
+        </div>
+
+        {/* Order Book */}
+        <div className="rounded-lg border overflow-hidden">
+          <div className="bg-muted/50 px-4 py-2 border-b">
+            <h3 className="text-sm font-semibold">Order Book</h3>
+          </div>
+          <div className="grid grid-cols-2 divide-x text-xs">
+            {/* Asks */}
+            <div>
+              <div className="grid grid-cols-3 px-2 sm:px-3 py-2 text-muted-foreground border-b">
+                <span>Price</span>
+                <span className="text-right">Amt</span>
+                <span className="text-right">Total</span>
+              </div>
+              {orderBook.asks.map((a, i) => (
+                <div key={i} className="grid grid-cols-3 px-2 sm:px-3 py-1.5 hover:bg-muted/30 font-mono text-[10px] sm:text-xs">
+                  <span className="text-sell truncate">{a.price}</span>
+                  <span className="text-right truncate">{a.amount}</span>
+                  <span className="text-right text-muted-foreground truncate">{a.total}</span>
+                </div>
+              ))}
+            </div>
+            {/* Bids */}
+            <div>
+              <div className="grid grid-cols-3 px-2 sm:px-3 py-2 text-muted-foreground border-b">
+                <span>Price</span>
+                <span className="text-right">Amt</span>
+                <span className="text-right">Total</span>
+              </div>
+              {orderBook.bids.map((b, i) => (
+                <div key={i} className="grid grid-cols-3 px-2 sm:px-3 py-1.5 hover:bg-muted/30 font-mono text-[10px] sm:text-xs">
+                  <span className="text-buy truncate">{b.price}</span>
+                  <span className="text-right truncate">{b.amount}</span>
+                  <span className="text-right text-muted-foreground truncate">{b.total}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
