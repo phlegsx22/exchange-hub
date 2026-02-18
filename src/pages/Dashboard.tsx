@@ -50,7 +50,7 @@ export default function Dashboard() {
   return (
     <div className="container py-8 space-y-6">
       {/* Top bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
@@ -58,7 +58,7 @@ export default function Dashboard() {
               {showBalances ? <Eye className="h-3.5 w-3.5 text-muted-foreground" /> : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
             </button>
           </div>
-          <h1 className="text-4xl font-bold font-mono">
+          <h1 className="text-3xl sm:text-4xl font-bold font-mono">
             {showBalances ? `$${totalValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "****"}
           </h1>
           <div className="flex items-center gap-3 mt-1">
@@ -239,8 +239,8 @@ export default function Dashboard() {
       </div>
 
       {/* Bottom bar */}
-      <div className="rounded-lg border bg-card p-4 flex items-center justify-between">
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+      <div className="rounded-lg border bg-card p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <span className="relative flex h-1.5 w-1.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
@@ -248,8 +248,8 @@ export default function Dashboard() {
             </span>
             Markets live
           </div>
-          <div className="flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-buy" /> All systems operational</div>
-          <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> Last updated: just now</div>
+          <div className="hidden sm:flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-buy" /> All systems operational</div>
+          <div className="hidden sm:flex items-center gap-1"><Clock className="h-3 w-3" /> Last updated: just now</div>
         </div>
         <Link to="/trade">
           <Button size="sm" className="gap-1 text-xs">

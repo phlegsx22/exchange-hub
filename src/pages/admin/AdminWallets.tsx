@@ -66,13 +66,13 @@ export default function AdminWallets() {
   }, 0);
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Wallet Management</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Wallet Management</h1>
           <p className="text-sm text-muted-foreground">{wallets.length} wallets · ${(totalBalance / 1e6).toFixed(1)}M total value</p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+        <Button size="sm" className="gap-1.5 self-start" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5" /> Create Wallet
         </Button>
       </div>

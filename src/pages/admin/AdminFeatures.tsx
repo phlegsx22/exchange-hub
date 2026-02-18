@@ -61,7 +61,7 @@ export default function AdminFeatures() {
   const categories = ["trading", "security", "platform"] as const;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Feature Toggles</h1>
         <p className="text-sm text-muted-foreground">Control platform features globally or per-user</p>
@@ -109,13 +109,13 @@ export default function AdminFeatures() {
         </h2>
         <Card>
           <CardContent className="p-4 space-y-4">
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search users..." className="pl-9" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
               </div>
               <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="w-52"><SelectValue placeholder="Select user..." /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Select user..." /></SelectTrigger>
                 <SelectContent>
                   {filteredUsers.map(u => (
                     <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>

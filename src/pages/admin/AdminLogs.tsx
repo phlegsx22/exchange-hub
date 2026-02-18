@@ -46,13 +46,13 @@ export default function AdminLogs() {
   }).length;
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Audit Logs</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Audit Logs</h1>
           <p className="text-sm text-muted-foreground">{filtered.length} events tracked</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5">
+        <Button variant="outline" size="sm" className="gap-1.5 self-start">
           <Download className="h-3.5 w-3.5" /> Export Logs
         </Button>
       </div>

@@ -39,12 +39,12 @@ export default function AdminOverview() {
   const suspended = mockUsers.filter(u => u.status === "suspended").length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard Overview</h1>
-          <p className="text-sm text-muted-foreground">Platform health and key metrics at a glance</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Dashboard Overview</h1>
+          <p className="text-sm text-muted-foreground">Platform health and key metrics</p>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -158,16 +158,16 @@ export default function AdminOverview() {
           <CardContent>
             <div className="space-y-1">
               {recentLogs.map((log) => (
-                <div key={log.id} className="flex items-center justify-between text-xs py-1.5 border-b border-border/50 last:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-1.5 w-1.5 rounded-full ${
+                <div key={log.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs py-1.5 border-b border-border/50 last:border-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
                       log.severity === "critical" ? "bg-sell" : log.severity === "warning" ? "bg-warning" : "bg-muted-foreground"
                     }`} />
-                    <span className="font-medium">{log.action}</span>
-                    <span className="text-muted-foreground">→ {log.target}</span>
+                    <span className="font-medium truncate">{log.action}</span>
+                    <span className="text-muted-foreground truncate hidden sm:inline">→ {log.target}</span>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <span>{log.actor}</span>
+                  <div className="flex items-center gap-2 text-muted-foreground ml-3.5 sm:ml-0 shrink-0">
+                    <span className="hidden md:inline">{log.actor}</span>
                     <span className="font-mono">{new Date(log.timestamp).toLocaleTimeString()}</span>
                   </div>
                 </div>
