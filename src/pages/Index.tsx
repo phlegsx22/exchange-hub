@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { BinanceTicker } from "@/components/BinanceTicker";
 import {
   ArrowRight, Shield, Zap, TrendingUp, BarChart3, Lock, Globe,
   ArrowUpRight, ArrowDownRight, Smartphone, Apple, Monitor,
@@ -295,7 +296,7 @@ export default function Index() {
   return (
     <div className="min-h-screen">
       {/* Ticker Tape */}
-      <TickerTape />
+      <BinanceTicker theme="dark" transparent={false} />
 
       {/* Live Activity Bar */}
       <div className="border-b bg-muted/30">
