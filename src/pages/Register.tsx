@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { BarChart3, Shield, Zap, Users, Lock, ArrowRight, ShieldCheck, Globe, Gift } from "lucide-react";
+import { Shield, Zap, Users, Lock, ArrowRight, ShieldCheck, Globe, Gift } from "lucide-react";
 import { useState, useEffect } from "react";
+import logoImg from "@/assets/logo.png";
 
 const stats = [
   { icon: Users, label: "10M+ traders worldwide" },
@@ -46,8 +47,8 @@ export default function Register() {
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'linear-gradient(hsl(var(--background)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--background)) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
         <div className="relative">
           <div className="flex items-center gap-2 font-bold text-xl mb-2">
-            <BarChart3 className="h-6 w-6" />
-            NexTrade
+            <img src={logoImg} alt="Annex-Ebank" className="h-7 w-7" />
+            Annex-Ebank
           </div>
           <p className="text-background/60 text-sm">The world's leading crypto exchange</p>
         </div>
@@ -96,8 +97,8 @@ export default function Register() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="lg:hidden flex items-center justify-center gap-2 mb-4">
-              <BarChart3 className="h-8 w-8" />
-              <span className="text-xl font-bold">NexTrade</span>
+              <img src={logoImg} alt="Annex-Ebank" className="h-8 w-8" />
+              <span className="text-xl font-bold">Annex-Ebank</span>
             </div>
             <h1 className="text-2xl font-bold">Create your account</h1>
             <p className="text-muted-foreground mt-1">Start trading in minutes</p>

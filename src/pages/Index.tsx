@@ -12,6 +12,7 @@ import {
   ArrowLeftRight, Timer, Fingerprint, ScanLine
 } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Bar, BarChart } from "recharts";
+import logo from "@/assets/logo.png";
 import { useEffect, useState, useCallback, useRef } from "react";
 
 // Sparkline data generators
@@ -71,7 +72,7 @@ const newListings = [
 ];
 
 const announcements = [
-  { title: "NexTrade Launchpool: Farm PYTH with BTC & USDT", tag: "New", time: "2h ago", icon: Sparkles },
+  { title: "Annex-Ebank Launchpool: Farm PYTH with BTC & USDT", tag: "New", time: "2h ago", icon: Sparkles },
   { title: "Zero-Fee Trading Event for SOL/USDT Pair", tag: "Promo", time: "4h ago", icon: Gift },
   { title: "System Upgrade: Matching Engine v3.2", tag: "System", time: "8h ago", icon: Cpu },
   { title: "New Margin Pairs Added: 15 New Trading Pairs", tag: "Update", time: "1d ago", icon: Layers },
@@ -811,7 +812,7 @@ export default function Index() {
       {/* Features */}
       <section className="bg-card border-y">
         <div className="container py-12">
-          <h2 className="text-2xl font-bold mb-2 text-center">Why NexTrade?</h2>
+          <h2 className="text-2xl font-bold mb-2 text-center">Why Annex-Ebank?</h2>
           <p className="text-muted-foreground text-center mb-8 text-sm">Built for traders, by traders</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {features.map((f) => (
@@ -839,7 +840,7 @@ export default function Index() {
             </div>
             <h2 className="text-2xl md:text-3xl font-bold mb-3">Trade Anywhere, Anytime</h2>
             <p className="text-muted-foreground mb-6">
-              Download the NexTrade app and never miss a trading opportunity. Available on iOS, Android, and Desktop.
+              Download the Annex-Ebank app and never miss a trading opportunity. Available on iOS, Android, and Desktop.
             </p>
             <div className="flex flex-wrap gap-3 mb-6">
               <Button variant="outline" className="gap-2"><Apple className="h-4 w-4" /> App Store</Button>
@@ -907,8 +908,8 @@ export default function Index() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-8">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 font-bold mb-3">
-                <BarChart3 className="h-5 w-5" />
-                NexTrade
+                <img src={logo} alt="Annex-Ebank" className="h-5 w-5" />
+                Annex-Ebank
               </div>
               <p className="text-xs text-muted-foreground mb-3">The world's leading cryptocurrency exchange platform.</p>
               <ActivityPulse />
@@ -930,7 +931,7 @@ export default function Index() {
             ))}
           </div>
           <div className="border-t pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-xs text-muted-foreground">© 2026 NexTrade. All rights reserved.</p>
+            <p className="text-xs text-muted-foreground">© 2026 Annex-Ebank. All rights reserved.</p>
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               <span>English</span>
               <span>USD</span>

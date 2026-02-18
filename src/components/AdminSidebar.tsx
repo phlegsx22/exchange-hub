@@ -2,8 +2,9 @@ import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, Wallet, ToggleLeft, ScrollText,
-  Shield, Settings, BarChart3, AlertTriangle, Ban
+  Shield, Settings, AlertTriangle, Ban
 } from "lucide-react";
+import logo from "@/assets/logo.png";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
   SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
@@ -36,7 +37,7 @@ export function AdminSidebar() {
           </div>
           <div>
             <p className="font-bold text-sm">Admin Panel</p>
-            <p className="text-[10px] text-muted-foreground">NexTrade Control Center</p>
+            <p className="text-[10px] text-muted-foreground">Annex-Ebank Control Center</p>
           </div>
         </div>
       </SidebarHeader>

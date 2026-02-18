@@ -1,7 +1,8 @@
 import { Outlet, Link } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
-import { BarChart3, Bell, LogOut } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 
 export function AdminLayout() {
@@ -14,8 +15,8 @@ export function AdminLayout() {
             <div className="flex items-center gap-3">
               <SidebarTrigger />
               <div className="flex items-center gap-2 text-sm font-medium">
-                <BarChart3 className="h-4 w-4" />
-                NexTrade Admin
+                <img src={logo} alt="Annex-Ebank" className="h-5 w-5" />
+                Annex-Ebank Admin
               </div>
             </div>
             <div className="flex items-center gap-2">

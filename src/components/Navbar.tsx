@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { BarChart3, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { useState } from "react";
 
 const navLinks = [
@@ -21,8 +22,8 @@ export function Navbar() {
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-2 font-bold text-xl tracking-tight">
-          <BarChart3 className="h-6 w-6" />
-          <span>NexTrade</span>
+          <img src={logo} alt="Annex-Ebank" className="h-7 w-7" />
+          <span>Annex-Ebank</span>
         </Link>
 
         {/* Desktop nav */}
