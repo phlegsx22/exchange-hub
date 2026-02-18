@@ -1,7 +1,8 @@
 import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { BarChart3, ArrowRight, Home, TrendingUp, Search } from "lucide-react";
+import { ArrowRight, Home, TrendingUp, Search } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const NotFound = () => {
   const location = useLocation();
@@ -34,8 +35,8 @@ const NotFound = () => {
           </Link>
         </div>
         <div className="mt-8 pt-6 border-t flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <BarChart3 className="h-4 w-4" />
-          <span>NexTrade — Markets are always open</span>
+          <img src={logo} alt="Annex-Ebank" className="h-4 w-4" />
+          <span>Annex-Ebank — Markets are always open</span>
           <span className="relative flex h-1.5 w-1.5 ml-1">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-buy" />

@@ -2,7 +2,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BarChart3, Shield, Lock, ArrowRight, ShieldCheck, Fingerprint, Eye, EyeOff } from "lucide-react";
+import { Shield, Lock, ArrowRight, ShieldCheck, Fingerprint, Eye, EyeOff } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { useState, useEffect } from "react";
 
 const liveTrades = [
@@ -38,8 +39,8 @@ export default function Login() {
         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'linear-gradient(hsl(var(--background)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--background)) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
         <div className="relative">
           <div className="flex items-center gap-2 font-bold text-xl mb-2">
-            <BarChart3 className="h-6 w-6" />
-            NexTrade
+            <img src={logo} alt="Annex-Ebank" className="h-7 w-7" />
+            Annex-Ebank
           </div>
           <p className="text-background/60 text-sm">The world's leading crypto exchange</p>
         </div>
@@ -88,14 +89,14 @@ export default function Login() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="lg:hidden flex items-center justify-center gap-2 mb-4">
-              <BarChart3 className="h-8 w-8" />
-              <span className="text-xl font-bold">NexTrade</span>
+              <img src={logo} alt="Annex-Ebank" className="h-8 w-8" />
+              <span className="text-xl font-bold">Annex-Ebank</span>
             </div>
             <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
               <Fingerprint className="h-6 w-6" />
             </div>
             <h1 className="text-2xl font-bold">Welcome back</h1>
-            <p className="text-muted-foreground mt-1">Log in to your NexTrade account</p>
+            <p className="text-muted-foreground mt-1">Log in to your Annex-Ebank account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
