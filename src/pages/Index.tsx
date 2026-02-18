@@ -4,10 +4,14 @@ import {
   ArrowRight, Shield, Zap, TrendingUp, BarChart3, Lock, Globe,
   ArrowUpRight, ArrowDownRight, Smartphone, Apple, Monitor,
   Users, Award, Clock, Flame, Star, ChevronRight, Bell,
-  Wallet, CreditCard, Building2, Gift, BookOpen, Headphones
+  Wallet, CreditCard, Building2, Gift, BookOpen, Headphones,
+  Activity, CircleDollarSign, Layers, Eye, ShieldCheck, FileCheck,
+  Sparkles, Radio, BadgeCheck, Trophy, Target, Cpu, Banknote,
+  PieChart, Landmark, Megaphone, Newspaper, TrendingDown,
+  ArrowLeftRight, Timer, Fingerprint, ScanLine
 } from "lucide-react";
-import { Area, AreaChart, ResponsiveContainer, Line, LineChart } from "recharts";
-import { useEffect, useState } from "react";
+import { Area, AreaChart, ResponsiveContainer, Bar, BarChart } from "recharts";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 // Sparkline data generators
 const generateSparkline = (trend: "up" | "down" | "volatile") => {
@@ -66,28 +70,20 @@ const newListings = [
 ];
 
 const announcements = [
-  { title: "NexTrade Launchpool: Farm PYTH with BTC & USDT", tag: "New", time: "2h ago" },
-  { title: "Zero-Fee Trading Event for SOL/USDT Pair", tag: "Promo", time: "4h ago" },
-  { title: "System Upgrade: Matching Engine v3.2", tag: "System", time: "8h ago" },
-  { title: "New Margin Pairs Added: 15 New Trading Pairs", tag: "Update", time: "1d ago" },
-];
-
-const stats = [
-  { label: "24h Volume", value: "$2.4B+" },
-  { label: "Supported Assets", value: "350+" },
-  { label: "Users Worldwide", value: "10M+" },
-  { label: "Countries", value: "180+" },
-  { label: "Trades/Second", value: "100K+" },
-  { label: "Uptime", value: "99.99%" },
+  { title: "NexTrade Launchpool: Farm PYTH with BTC & USDT", tag: "New", time: "2h ago", icon: Sparkles },
+  { title: "Zero-Fee Trading Event for SOL/USDT Pair", tag: "Promo", time: "4h ago", icon: Gift },
+  { title: "System Upgrade: Matching Engine v3.2", tag: "System", time: "8h ago", icon: Cpu },
+  { title: "New Margin Pairs Added: 15 New Trading Pairs", tag: "Update", time: "1d ago", icon: Layers },
+  { title: "Refer & Earn: Up to 40% Commission", tag: "Promo", time: "2d ago", icon: Megaphone },
 ];
 
 const features = [
-  { icon: Zap, title: "Lightning Fast", desc: "Execute trades in milliseconds with our high-performance matching engine." },
-  { icon: Shield, title: "Bank-Grade Security", desc: "Multi-layer security with cold storage, 2FA, and real-time monitoring." },
-  { icon: TrendingUp, title: "Advanced Trading", desc: "Spot, margin, and futures trading with professional charting tools." },
-  { icon: Lock, title: "Regulated", desc: "Fully compliant with global regulations and licensed in 30+ jurisdictions." },
-  { icon: Globe, title: "Global Access", desc: "Trade from anywhere, 24/7 with multi-language and multi-currency support." },
-  { icon: BarChart3, title: "Deep Liquidity", desc: "Access deep order books and tight spreads across all trading pairs." },
+  { icon: Zap, title: "Lightning Fast", desc: "Execute trades in milliseconds with our high-performance matching engine.", stat: "100K TPS" },
+  { icon: Shield, title: "Bank-Grade Security", desc: "Multi-layer security with cold storage, 2FA, and real-time monitoring.", stat: "$350M insured" },
+  { icon: TrendingUp, title: "Advanced Trading", desc: "Spot, margin, and futures trading with professional charting tools.", stat: "125x leverage" },
+  { icon: Lock, title: "Regulated", desc: "Fully compliant with global regulations and licensed in 30+ jurisdictions.", stat: "30+ licenses" },
+  { icon: Globe, title: "Global Access", desc: "Trade from anywhere, 24/7 with multi-language and multi-currency support.", stat: "180+ countries" },
+  { icon: BarChart3, title: "Deep Liquidity", desc: "Access deep order books and tight spreads across all trading pairs.", stat: "$2.4B daily" },
 ];
 
 const volumeData = Array.from({ length: 30 }, (_, i) => ({
@@ -95,6 +91,56 @@ const volumeData = Array.from({ length: 30 }, (_, i) => ({
   volume: 1.2 + Math.random() * 2.5 + (i > 20 ? 1 : 0),
   users: 80000 + Math.floor(Math.random() * 40000) + i * 1000,
 }));
+
+const barVolumeData = Array.from({ length: 24 }, (_, i) => ({
+  hour: `${i}:00`,
+  buy: Math.floor(Math.random() * 500 + 300),
+  sell: Math.floor(Math.random() * 400 + 200),
+}));
+
+// Simulated live trade feed
+const tradeSymbols = ["BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "AVAX", "LINK", "DOT", "MATIC", "BNB", "UNI"];
+const generateTrade = () => {
+  const symbol = tradeSymbols[Math.floor(Math.random() * tradeSymbols.length)];
+  const isBuy = Math.random() > 0.45;
+  const amounts = { BTC: [0.01, 2], ETH: [0.1, 15], SOL: [1, 100], XRP: [100, 50000], DOGE: [1000, 500000], ADA: [100, 50000], AVAX: [1, 200], LINK: [10, 2000], DOT: [10, 3000], MATIC: [100, 50000], BNB: [0.1, 20], UNI: [10, 2000] };
+  const [min, max] = amounts[symbol as keyof typeof amounts] || [1, 100];
+  const amount = (min + Math.random() * (max - min)).toFixed(symbol === "BTC" ? 4 : symbol === "ETH" ? 3 : 2);
+  const prices: Record<string, number> = { BTC: 97245, ETH: 3412, SOL: 198, XRP: 2.41, DOGE: 0.342, ADA: 0.982, AVAX: 42, LINK: 18.3, DOT: 8.94, MATIC: 1.24, BNB: 612, UNI: 12.87 };
+  const price = (prices[symbol]! * (1 + (Math.random() - 0.5) * 0.002)).toFixed(2);
+  const value = (parseFloat(amount) * parseFloat(price));
+  return { symbol, side: isBuy ? "BUY" : "SELL", amount, price, value, time: new Date() };
+};
+
+// Animated counter hook
+function useAnimatedCounter(target: number, duration: number = 2000, prefix = "", suffix = "") {
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !started) setStarted(true);
+    }, { threshold: 0.3 });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [started]);
+
+  useEffect(() => {
+    if (!started) return;
+    const steps = 60;
+    const inc = target / steps;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += inc;
+      if (current >= target) { setCount(target); clearInterval(timer); }
+      else setCount(Math.floor(current));
+    }, duration / steps);
+    return () => clearInterval(timer);
+  }, [started, target, duration]);
+
+  return { ref, display: `${prefix}${count.toLocaleString()}${suffix}` };
+}
 
 function TickerTape() {
   return (
@@ -139,31 +185,159 @@ function MiniSparkline({ data, up }: { data: { v: number }[]; up: boolean }) {
   );
 }
 
+// Live trade feed component
+function LiveTradeFeed() {
+  const [trades, setTrades] = useState(() => Array.from({ length: 8 }, generateTrade));
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTrades(prev => [generateTrade(), ...prev.slice(0, 7)]);
+    }, 1200);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="space-y-1">
+      {trades.map((t, i) => (
+        <div
+          key={`${t.time.getTime()}-${i}`}
+          className={`flex items-center justify-between text-xs px-3 py-1.5 rounded transition-all ${
+            i === 0 ? "bg-muted/60 animate-[fade-in_0.3s_ease-out]" : ""
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span className={`h-1.5 w-1.5 rounded-full ${t.side === "BUY" ? "bg-buy" : "bg-sell"}`} />
+            <span className={`font-semibold ${t.side === "BUY" ? "text-buy" : "text-sell"}`}>{t.side}</span>
+            <span className="font-medium">{t.symbol}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-muted-foreground">{t.amount}</span>
+            <span className="font-mono">${t.value >= 1000 ? `${(t.value / 1000).toFixed(1)}K` : t.value.toFixed(0)}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Live activity pulse
+function ActivityPulse() {
+  const [activeUsers, setActiveUsers] = useState(48293);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveUsers(prev => prev + Math.floor((Math.random() - 0.45) * 50));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-buy" />
+      </span>
+      <span className="font-mono">{activeUsers.toLocaleString()}</span> traders online
+    </div>
+  );
+}
+
+// Fear & Greed gauge
+function FearGreedGauge() {
+  const value = 72; // "Greed"
+  const label = value > 75 ? "Extreme Greed" : value > 55 ? "Greed" : value > 45 ? "Neutral" : value > 25 ? "Fear" : "Extreme Fear";
+  const color = value > 55 ? "text-buy" : value > 45 ? "text-warning" : "text-sell";
+  
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Activity className="h-4 w-4" />
+        <p className="font-semibold text-sm">Fear & Greed Index</p>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className="relative h-16 w-16">
+          <svg viewBox="0 0 36 36" className="h-16 w-16 -rotate-90">
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
+            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--buy))" strokeWidth="3" strokeDasharray={`${value}, 100`} strokeLinecap="round" />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-lg font-bold font-mono">{value}</span>
+          </div>
+        </div>
+        <div>
+          <p className={`font-semibold ${color}`}>{label}</p>
+          <p className="text-xs text-muted-foreground">Market sentiment indicator</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Index() {
   const [btcPrice, setBtcPrice] = useState(97245.30);
+  const [tradeCount, setTradeCount] = useState(1284523);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setBtcPrice(prev => prev + (Math.random() - 0.48) * 50);
+      setTradeCount(prev => prev + Math.floor(Math.random() * 15 + 5));
     }, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  const vol = useAnimatedCounter(24, 2000, "$", "B+");
+  const assets = useAnimatedCounter(350, 1500, "", "+");
+  const userCount = useAnimatedCounter(10, 2000, "", "M+");
+  const countries = useAnimatedCounter(180, 1800, "", "+");
+  const tps = useAnimatedCounter(100, 1500, "", "K+");
+  const uptime = useAnimatedCounter(99, 1000, "", ".99%");
 
   return (
     <div className="min-h-screen">
       {/* Ticker Tape */}
       <TickerTape />
 
+      {/* Live Activity Bar */}
+      <div className="border-b bg-muted/30">
+        <div className="container flex items-center justify-between py-1.5 text-xs">
+          <div className="flex items-center gap-4">
+            <ActivityPulse />
+            <div className="hidden sm:flex items-center gap-1.5 text-muted-foreground">
+              <Radio className="h-3 w-3 text-sell animate-pulse" />
+              <span className="font-mono">{tradeCount.toLocaleString()}</span> trades today
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <ShieldCheck className="h-3 w-3 text-buy" />
+              <span>All systems operational</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Hero + Side Widgets */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--muted))_0%,transparent_70%)]" />
+        {/* Animated grid background */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+        
         <div className="container relative py-12 md:py-20">
           <div className="grid lg:grid-cols-5 gap-8 items-start">
             {/* Hero Left */}
             <div className="lg:col-span-3 pt-8">
-              <div className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm text-muted-foreground mb-6">
-                <span className="h-2 w-2 rounded-full bg-buy animate-pulse" />
-                Markets are live — 350+ pairs trading
+              <div className="flex items-center gap-3 mb-6">
+                <div className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm text-muted-foreground">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-buy" />
+                  </span>
+                  Markets are live — 350+ pairs trading
+                </div>
+                <div className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-warning/30 bg-warning/5 px-3 py-1.5 text-xs text-warning">
+                  <Trophy className="h-3 w-3" />
+                  #1 Exchange by Volume
+                </div>
               </div>
               <h1 className="text-4xl md:text-6xl font-bold tracking-tight leading-[1.1] mb-4">
                 Trade Crypto with
@@ -171,7 +345,7 @@ export default function Index() {
                 <span className="text-muted-foreground">Confidence</span>
               </h1>
               <p className="text-lg text-muted-foreground max-w-xl mb-8">
-                The most trusted cryptocurrency exchange. Buy, sell, and trade 350+ digital assets with industry-leading security.
+                The most trusted cryptocurrency exchange. Buy, sell, and trade 350+ digital assets with industry-leading security and <span className="text-foreground font-medium">zero hidden fees</span>.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
                 <Link to="/register">
@@ -180,17 +354,22 @@ export default function Index() {
                   </Button>
                 </Link>
                 <Link to="/trade">
-                  <Button size="lg" variant="outline" className="text-base px-8">
-                    View Markets
+                  <Button size="lg" variant="outline" className="text-base px-8 gap-2">
+                    <Eye className="h-4 w-4" /> View Markets
                   </Button>
                 </Link>
               </div>
               {/* Quick buy widget */}
               <div className="rounded-lg border bg-card p-4 max-w-sm">
-                <p className="text-xs text-muted-foreground mb-2">Quick Buy</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-muted-foreground">Quick Buy</p>
+                  <div className="flex items-center gap-1 text-[10px] text-buy">
+                    <Zap className="h-3 w-3" /> Instant
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
                   <div className="flex-1 rounded border bg-background px-3 py-2 text-sm font-mono">100.00 USD</div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  <ArrowLeftRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="flex-1 rounded border bg-background px-3 py-2 text-sm font-mono">0.00103 BTC</div>
                 </div>
                 <Link to="/trade">
@@ -231,28 +410,19 @@ export default function Index() {
                 </div>
               </div>
 
-              {/* Announcements */}
+              {/* Live Trade Feed */}
               <div className="rounded-lg border bg-card p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Bell className="h-4 w-4" />
-                    <p className="font-semibold text-sm">Announcements</p>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-buy" />
+                    </span>
+                    <p className="font-semibold text-sm">Live Trades</p>
                   </div>
-                  <span className="text-xs text-muted-foreground cursor-pointer hover:underline">View All</span>
+                  <Link to="/trade" className="text-xs text-muted-foreground hover:underline">Open Terminal</Link>
                 </div>
-                <div className="space-y-2.5">
-                  {announcements.map((a, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs group cursor-pointer">
-                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                        a.tag === "New" ? "bg-buy/10 text-buy" :
-                        a.tag === "Promo" ? "bg-warning/10 text-warning" :
-                        "bg-muted text-muted-foreground"
-                      }`}>{a.tag}</span>
-                      <span className="group-hover:underline line-clamp-1 flex-1">{a.title}</span>
-                      <span className="text-muted-foreground shrink-0">{a.time}</span>
-                    </div>
-                  ))}
-                </div>
+                <LiveTradeFeed />
               </div>
 
               {/* New Listings */}
@@ -260,10 +430,11 @@ export default function Index() {
                 <div className="flex items-center gap-2 mb-3">
                   <Flame className="h-4 w-4 text-sell" />
                   <p className="font-semibold text-sm">New Listings</p>
+                  <span className="ml-auto px-1.5 py-0.5 rounded-full bg-sell/10 text-sell text-[10px] font-bold">HOT</span>
                 </div>
                 <div className="space-y-2">
                   {newListings.map((n, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
+                    <div key={i} className="flex items-center justify-between text-sm group cursor-pointer hover:bg-muted/30 -mx-2 px-2 py-1 rounded transition-colors">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{n.pair}</span>
                         {n.hot && <Flame className="h-3 w-3 text-sell" />}
@@ -281,19 +452,62 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Stats Bar */}
+      {/* Stats Bar - Animated Counters */}
       <section className="border-y bg-card">
         <div className="container grid grid-cols-3 md:grid-cols-6 divide-x">
-          {stats.map((stat) => (
-            <div key={stat.label} className="py-6 text-center">
-              <p className="text-lg md:text-2xl font-bold font-mono">{stat.value}</p>
+          {[
+            { ...vol, label: "24h Volume", icon: CircleDollarSign },
+            { ...assets, label: "Supported Assets", icon: Layers },
+            { ...userCount, label: "Users Worldwide", icon: Users },
+            { ...countries, label: "Countries", icon: Globe },
+            { ...tps, label: "Trades/Second", icon: Zap },
+            { ...uptime, label: "Uptime", icon: ShieldCheck },
+          ].map((stat) => (
+            <div key={stat.label} ref={stat.ref} className="py-6 text-center group">
+              <stat.icon className="h-4 w-4 mx-auto mb-1.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+              <p className="text-lg md:text-2xl font-bold font-mono">{stat.display}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Hot Markets with Sparklines + Gainers/Losers */}
+      {/* Announcements Banner */}
+      <section className="border-b bg-muted/20">
+        <div className="container py-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Megaphone className="h-5 w-5" />
+            <h2 className="text-lg font-bold">Latest Announcements</h2>
+            <span className="ml-auto text-xs text-muted-foreground cursor-pointer hover:underline flex items-center gap-1">View All <ChevronRight className="h-3 w-3" /></span>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {announcements.slice(0, 3).map((a, i) => (
+              <div key={i} className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:shadow-md transition-all cursor-pointer group">
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+                  a.tag === "New" ? "bg-buy/10 text-buy" :
+                  a.tag === "Promo" ? "bg-warning/10 text-warning" :
+                  "bg-muted text-muted-foreground"
+                }`}>
+                  <a.icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium group-hover:underline line-clamp-2">{a.title}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                      a.tag === "New" ? "bg-buy/10 text-buy" :
+                      a.tag === "Promo" ? "bg-warning/10 text-warning" :
+                      "bg-muted text-muted-foreground"
+                    }`}>{a.tag}</span>
+                    <span className="text-xs text-muted-foreground">{a.time}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Hot Markets with Sparklines + Gainers/Losers + Fear & Greed */}
       <section className="container py-12">
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Hot Markets Table */}
@@ -302,6 +516,7 @@ export default function Index() {
               <div className="flex items-center gap-2">
                 <Flame className="h-5 w-5 text-sell" />
                 <h2 className="text-xl font-bold">Hot Markets</h2>
+                <span className="hidden sm:inline text-xs text-muted-foreground ml-2">Updated live</span>
               </div>
               <Link to="/trade" className="text-sm text-muted-foreground hover:underline flex items-center gap-1">
                 View All <ChevronRight className="h-3 w-3" />
@@ -349,7 +564,7 @@ export default function Index() {
             </div>
           </div>
 
-          {/* Gainers & Losers */}
+          {/* Gainers, Losers, Fear & Greed */}
           <div className="space-y-4">
             <div className="rounded-lg border bg-card p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -358,7 +573,7 @@ export default function Index() {
               </div>
               <div className="space-y-2.5">
                 {topGainers.map((g, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
+                  <div key={i} className="flex items-center justify-between text-sm hover:bg-muted/30 -mx-2 px-2 py-0.5 rounded cursor-pointer transition-colors">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
                       <span className="font-medium">{g.pair}</span>
@@ -379,7 +594,7 @@ export default function Index() {
               </div>
               <div className="space-y-2.5">
                 {topLosers.map((l, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
+                  <div key={i} className="flex items-center justify-between text-sm hover:bg-muted/30 -mx-2 px-2 py-0.5 rounded cursor-pointer transition-colors">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
                       <span className="font-medium">{l.pair}</span>
@@ -393,20 +608,52 @@ export default function Index() {
               </div>
             </div>
 
-            {/* 24h Volume Chart Mini */}
-            <div className="rounded-lg border bg-card p-4">
-              <p className="font-semibold text-sm mb-1">30-Day Volume</p>
-              <p className="text-2xl font-bold font-mono mb-2">$2.4B</p>
-              <div className="h-20">
+            {/* Fear & Greed Index */}
+            <FearGreedGauge />
+          </div>
+        </div>
+      </section>
+
+      {/* Buy/Sell Volume Chart */}
+      <section className="border-y bg-card">
+        <div className="container py-12">
+          <div className="grid lg:grid-cols-2 gap-8">
+            {/* 24h Buy/Sell Volume */}
+            <div className="rounded-lg border bg-background p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold">24h Trading Activity</h3>
+                  <p className="text-sm text-muted-foreground">Buy vs Sell volume by hour</p>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-buy" /> Buys</div>
+                  <div className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sell" /> Sells</div>
+                </div>
+              </div>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barVolumeData}>
+                    <Bar dataKey="buy" fill="hsl(142,71%,45%)" radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="sell" fill="hsl(0,72%,51%)" radius={[2, 2, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Market Overview */}
+            <div className="rounded-lg border bg-background p-6">
+              <h3 className="text-lg font-bold mb-1">30-Day Volume Trend</h3>
+              <p className="text-sm text-muted-foreground mb-4">Daily volume over the last 30 days (in billions)</p>
+              <div className="h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={volumeData}>
                     <defs>
-                      <linearGradient id="volGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(0,0%,50%)" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="hsl(0,0%,50%)" stopOpacity={0} />
+                      <linearGradient id="volGrad2" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(0,0%,0%)" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="hsl(0,0%,0%)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <Area type="monotone" dataKey="volume" stroke="hsl(0,0%,40%)" fill="url(#volGrad)" strokeWidth={1.5} dot={false} />
+                    <Area type="monotone" dataKey="volume" stroke="hsl(0,0%,20%)" fill="url(#volGrad2)" strokeWidth={2} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -416,22 +663,34 @@ export default function Index() {
       </section>
 
       {/* Services / Products Grid */}
-      <section className="border-y bg-card">
+      <section className="bg-background">
         <div className="container py-12">
-          <h2 className="text-2xl font-bold mb-6">Explore Products</h2>
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold mb-2">Explore Products</h2>
+            <p className="text-muted-foreground text-sm">Everything you need to trade, earn, and grow your portfolio</p>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { icon: BarChart3, title: "Spot Trading", desc: "Buy & sell 350+ coins", color: "text-foreground" },
-              { icon: TrendingUp, title: "Futures", desc: "Up to 125x leverage", color: "text-foreground" },
-              { icon: Wallet, title: "Earn", desc: "Up to 12% APY", color: "text-buy" },
-              { icon: CreditCard, title: "Buy Crypto", desc: "Visa, Mastercard, Apple Pay", color: "text-foreground" },
-              { icon: Gift, title: "Launchpad", desc: "New token offerings", color: "text-warning" },
-              { icon: Building2, title: "OTC Desk", desc: "Large volume trades", color: "text-foreground" },
-              { icon: BookOpen, title: "Academy", desc: "Learn crypto trading", color: "text-foreground" },
-              { icon: Award, title: "VIP Program", desc: "Reduced fees & perks", color: "text-foreground" },
+              { icon: BarChart3, title: "Spot Trading", desc: "Buy & sell 350+ coins", badge: "Popular" },
+              { icon: TrendingUp, title: "Futures", desc: "Up to 125x leverage", badge: "Pro" },
+              { icon: Wallet, title: "Earn", desc: "Up to 12% APY", badge: "Earn" },
+              { icon: CreditCard, title: "Buy Crypto", desc: "Visa, Mastercard, Apple Pay", badge: null },
+              { icon: Gift, title: "Launchpad", desc: "New token offerings", badge: "New" },
+              { icon: Building2, title: "OTC Desk", desc: "Large volume trades", badge: null },
+              { icon: BookOpen, title: "Academy", desc: "Learn crypto trading", badge: "Free" },
+              { icon: Award, title: "VIP Program", desc: "Reduced fees & perks", badge: null },
             ].map((p, i) => (
-              <div key={i} className="p-4 rounded-lg border bg-background hover:shadow-md transition-all cursor-pointer group">
-                <p.icon className={`h-6 w-6 mb-2 ${p.color} group-hover:scale-110 transition-transform`} />
+              <div key={i} className="p-4 rounded-lg border bg-card hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group relative">
+                {p.badge && (
+                  <span className={`absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                    p.badge === "New" ? "bg-sell/10 text-sell" :
+                    p.badge === "Popular" ? "bg-buy/10 text-buy" :
+                    p.badge === "Pro" ? "bg-foreground/10 text-foreground" :
+                    p.badge === "Earn" ? "bg-buy/10 text-buy" :
+                    "bg-muted text-muted-foreground"
+                  }`}>{p.badge}</span>
+                )}
+                <p.icon className="h-6 w-6 mb-2 group-hover:scale-110 transition-transform" />
                 <p className="font-semibold text-sm">{p.title}</p>
                 <p className="text-xs text-muted-foreground">{p.desc}</p>
               </div>
@@ -440,28 +699,50 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Volume Chart + How it Works */}
+      {/* Security & Compliance Section */}
+      <section className="border-y bg-card">
+        <div className="container py-12">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold mb-2">Security First</h2>
+            <p className="text-muted-foreground text-sm">Your assets are protected by industry-leading security measures</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { icon: Shield, title: "Cold Storage", desc: "95% of assets stored offline in air-gapped cold wallets", stat: "95%" },
+              { icon: Fingerprint, title: "Biometric Auth", desc: "Face ID, Touch ID, and hardware security key support", stat: "2FA" },
+              { icon: ScanLine, title: "Real-time Monitoring", desc: "24/7 AI-powered threat detection and anomaly monitoring", stat: "24/7" },
+              { icon: FileCheck, title: "Proof of Reserves", desc: "Verifiable on-chain proof of reserves, audited monthly", stat: "1:1" },
+            ].map((s, i) => (
+              <div key={i} className="text-center p-4 rounded-lg border bg-background">
+                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+                  <s.icon className="h-6 w-6" />
+                </div>
+                <p className="text-xl font-bold font-mono mb-1">{s.stat}</p>
+                <p className="font-semibold text-sm mb-1">{s.title}</p>
+                <p className="text-xs text-muted-foreground">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-center gap-6 mt-8 pt-6 border-t">
+            {[
+              { icon: BadgeCheck, label: "SOC 2 Certified" },
+              { icon: ShieldCheck, label: "ISO 27001" },
+              { icon: Lock, label: "PCI DSS" },
+              { icon: FileCheck, label: "GDPR Compliant" },
+              { icon: Landmark, label: "Licensed in 30+" },
+            ].map((c, i) => (
+              <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <c.icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{c.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it Works + Announcements */}
       <section className="container py-12">
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Trading Volume */}
-          <div className="rounded-lg border bg-card p-6">
-            <h3 className="text-lg font-bold mb-1">Trading Volume</h3>
-            <p className="text-sm text-muted-foreground mb-4">Daily volume over the last 30 days (in billions)</p>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={volumeData}>
-                  <defs>
-                    <linearGradient id="volGrad2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(0,0%,0%)" stopOpacity={0.15} />
-                      <stop offset="100%" stopColor="hsl(0,0%,0%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Area type="monotone" dataKey="volume" stroke="hsl(0,0%,20%)" fill="url(#volGrad2)" strokeWidth={2} dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
           {/* How it Works */}
           <div>
             <h3 className="text-lg font-bold mb-6">Start Trading in 3 Steps</h3>
@@ -471,8 +752,8 @@ export default function Index() {
                 { step: "02", title: "Verify Identity", desc: "Complete KYC verification to unlock full trading features.", icon: Shield },
                 { step: "03", title: "Start Trading", desc: "Deposit funds and trade 350+ crypto assets instantly.", icon: TrendingUp },
               ].map((s) => (
-                <div key={s.step} className="flex items-start gap-4">
-                  <div className="h-10 w-10 rounded-lg bg-foreground text-background flex items-center justify-center text-sm font-bold font-mono shrink-0">
+                <div key={s.step} className="flex items-start gap-4 group">
+                  <div className="h-10 w-10 rounded-lg bg-foreground text-background flex items-center justify-center text-sm font-bold font-mono shrink-0 group-hover:scale-110 transition-transform">
                     {s.step}
                   </div>
                   <div>
@@ -488,6 +769,41 @@ export default function Index() {
               </Link>
             </div>
           </div>
+
+          {/* More Announcements */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Newspaper className="h-5 w-5" />
+                <h3 className="text-lg font-bold">News & Updates</h3>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {announcements.map((a, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:shadow-sm transition-all cursor-pointer group">
+                  <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    a.tag === "New" ? "bg-buy/10 text-buy" :
+                    a.tag === "Promo" ? "bg-warning/10 text-warning" :
+                    "bg-muted text-muted-foreground"
+                  }`}>
+                    <a.icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium group-hover:underline line-clamp-1">{a.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                        a.tag === "New" ? "bg-buy/10 text-buy" :
+                        a.tag === "Promo" ? "bg-warning/10 text-warning" :
+                        "bg-muted text-muted-foreground"
+                      }`}>{a.tag}</span>
+                      <span className="text-xs text-muted-foreground">{a.time}</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -498,8 +814,13 @@ export default function Index() {
           <p className="text-muted-foreground text-center mb-8 text-sm">Built for traders, by traders</p>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {features.map((f) => (
-              <div key={f.title} className="p-5 rounded-lg border bg-background hover:shadow-md transition-shadow">
-                <f.icon className="h-7 w-7 mb-3" />
+              <div key={f.title} className="p-5 rounded-lg border bg-background hover:shadow-md hover:-translate-y-0.5 transition-all group">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center group-hover:bg-foreground group-hover:text-background transition-colors">
+                    <f.icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">{f.stat}</span>
+                </div>
                 <h3 className="font-semibold mb-1">{f.title}</h3>
                 <p className="text-muted-foreground text-sm">{f.desc}</p>
               </div>
@@ -512,6 +833,9 @@ export default function Index() {
       <section className="container py-12">
         <div className="grid lg:grid-cols-2 gap-8 items-center">
           <div>
+            <div className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs text-muted-foreground mb-4">
+              <Smartphone className="h-3 w-3" /> Available on all platforms
+            </div>
             <h2 className="text-2xl md:text-3xl font-bold mb-3">Trade Anywhere, Anytime</h2>
             <p className="text-muted-foreground mb-6">
               Download the NexTrade app and never miss a trading opportunity. Available on iOS, Android, and Desktop.
@@ -527,6 +851,7 @@ export default function Index() {
             </div>
           </div>
           <div className="rounded-lg border bg-card p-6">
+            <h3 className="font-semibold text-sm mb-4 flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Trust Indicators</h3>
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: "SOF Reserves", value: "$4.2B", icon: Shield },
@@ -534,7 +859,7 @@ export default function Index() {
                 { label: "Avg Response", value: "<30s", icon: Headphones },
                 { label: "Uptime", value: "99.99%", icon: Clock },
               ].map((t, i) => (
-                <div key={i} className="p-3 rounded border bg-background">
+                <div key={i} className="p-3 rounded border bg-background hover:shadow-sm transition-shadow">
                   <t.icon className="h-4 w-4 text-muted-foreground mb-1" />
                   <p className="text-lg font-bold font-mono">{t.value}</p>
                   <p className="text-xs text-muted-foreground">{t.label}</p>
@@ -547,22 +872,30 @@ export default function Index() {
 
       {/* CTA */}
       <section className="border-t bg-foreground text-background">
-        <div className="container py-16 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-3">Ready to Start Trading?</h2>
-          <p className="text-background/60 mb-8 max-w-lg mx-auto">
-            Join 10M+ traders worldwide. Create your account in minutes and get $100 in trading bonus.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link to="/register">
-              <Button size="lg" variant="secondary" className="px-10 gap-2">
-                Create Free Account <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link to="/trade">
-              <Button size="lg" variant="outline" className="px-10 border-background/20 text-background hover:bg-background/10">
-                Explore Markets
-              </Button>
-            </Link>
+        <div className="container py-16 text-center relative overflow-hidden">
+          {/* Subtle grid overlay */}
+          <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'linear-gradient(hsl(var(--background)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--background)) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 rounded-full border border-background/20 px-4 py-1.5 text-sm text-background/60 mb-6">
+              <Sparkles className="h-3.5 w-3.5" />
+              Limited time: $100 bonus for new users
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold mb-3">Ready to Start Trading?</h2>
+            <p className="text-background/60 mb-8 max-w-lg mx-auto">
+              Join 10M+ traders worldwide. Create your account in minutes and get $100 in trading bonus.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link to="/register">
+                <Button size="lg" variant="secondary" className="px-10 gap-2">
+                  Create Free Account <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link to="/trade">
+                <Button size="lg" variant="outline" className="px-10 border-background/20 text-background hover:bg-background/10">
+                  Explore Markets
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -576,7 +909,8 @@ export default function Index() {
                 <BarChart3 className="h-5 w-5" />
                 NexTrade
               </div>
-              <p className="text-xs text-muted-foreground">The world's leading cryptocurrency exchange platform.</p>
+              <p className="text-xs text-muted-foreground mb-3">The world's leading cryptocurrency exchange platform.</p>
+              <ActivityPulse />
             </div>
             {[
               { title: "Products", links: ["Spot Trading", "Futures", "Earn", "Launchpad", "OTC"] },
