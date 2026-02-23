@@ -12,6 +12,7 @@ import VerifyEmail from "./pages/VerifyEmail";
 import KYC from "./pages/KYC";
 import Dashboard from "./pages/Dashboard";
 import Assets from "./pages/Assets";
+import Deposit from "./pages/Deposit";
 import Withdraw from "./pages/Withdraw";
 import Transfer from "./pages/Transfer";
 import Trade from "./pages/Trade";
@@ -65,6 +66,7 @@ const App = () => (
                 <Route path="/kyc" element={<RequireVerified><KYC /></RequireVerified>} />
                 <Route path="/dashboard" element={<RequireVerified><Dashboard /></RequireVerified>} />
                 <Route path="/assets" element={<RequireVerified><Assets /></RequireVerified>} />
+                <Route path="/deposit" element={<RequireVerified><Deposit /></RequireVerified>} />
                 <Route path="/withdraw" element={<RequireVerified><Withdraw /></RequireVerified>} />
                 <Route path="/transfer" element={<RequireVerified><Transfer /></RequireVerified>} />
                 <Route path="/trade" element={<RequireVerified><Trade /></RequireVerified>} />

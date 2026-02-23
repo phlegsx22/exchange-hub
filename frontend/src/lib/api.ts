@@ -26,6 +26,16 @@ export interface RegisterResponse {
   user: AuthUser;
 }
 
+export type SupportedAssetNetwork = {
+  id: string;
+  assetSymbol: string;
+  chainSlug: string;
+  chainName: string;
+  contractAddress: string | null;
+  isDepositEnabled: boolean;
+  isWithdrawEnabled: boolean;
+};
+
 export function getStoredAuth(): AuthState | null {
   try {
     const raw = localStorage.getItem(AUTH_KEY);
@@ -231,5 +241,32 @@ export const api = {
       throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
     }
     return handleResponse<{ submissionId?: string; status: string; message: string }>(res);
+  },
+
+  async supportedNetworks() {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/wallets/supported`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+    } catch {
+      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+    }
+    return handleResponse<{ ok: true; assetNetworks: SupportedAssetNetwork[] }>(res);
+  },
+
+  async depositAddress(assetNetworkId: string) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/wallets/deposit-address`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ assetNetworkId }),
+      });
+    } catch {
+      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+    }
+    return handleResponse<{ ok: true; address: string; memo: string | null; isPlaceholder: boolean }>(res);
   },
 };

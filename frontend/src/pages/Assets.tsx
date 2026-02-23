@@ -64,6 +64,7 @@ export default function Assets() {
           <p className="text-muted-foreground text-sm">Manage your cryptocurrency portfolio</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link to="/deposit"><Button variant="outline" size="sm" className="gap-1.5"><Wallet className="h-3.5 w-3.5" /> Deposit</Button></Link>
           <Link to="/withdraw"><Button variant="outline" size="sm" className="gap-1.5"><Send className="h-3.5 w-3.5" /> Withdraw</Button></Link>
           <Link to="/transfer"><Button variant="outline" size="sm" className="gap-1.5"><ArrowLeftRight className="h-3.5 w-3.5" /> Transfer</Button></Link>
         </div>

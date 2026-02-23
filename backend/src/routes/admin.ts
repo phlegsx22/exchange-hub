@@ -15,6 +15,72 @@ import {
 
 const router = Router();
 
+type SeedChain = {
+  slug: string;
+  name: string;
+  chainId: number | null;
+  nativeSymbol: string;
+  isEvm: boolean;
+};
+
+type SeedAsset = {
+  symbol: string;
+  name: string;
+  decimals: number;
+  isNative: boolean;
+};
+
+type SeedAssetNetwork = {
+  assetSymbol: string;
+  chainSlug: string;
+  contractAddress?: string | null;
+};
+
+const SEED_CHAINS: SeedChain[] = [
+  { slug: "bitcoin", name: "Bitcoin", chainId: null, nativeSymbol: "BTC", isEvm: false },
+  { slug: "ethereum", name: "Ethereum", chainId: 1, nativeSymbol: "ETH", isEvm: true },
+  { slug: "tron", name: "Tron", chainId: null, nativeSymbol: "TRX", isEvm: false },
+  { slug: "bsc", name: "BNB Smart Chain", chainId: 56, nativeSymbol: "BNB", isEvm: true },
+  { slug: "base", name: "Base", chainId: 8453, nativeSymbol: "ETH", isEvm: true },
+  { slug: "arbitrum", name: "Arbitrum One", chainId: 42161, nativeSymbol: "ETH", isEvm: true },
+];
+
+const SEED_ASSETS: SeedAsset[] = [
+  { symbol: "BTC", name: "Bitcoin", decimals: 8, isNative: true },
+  { symbol: "ETH", name: "Ethereum", decimals: 18, isNative: true },
+  { symbol: "BNB", name: "BNB", decimals: 18, isNative: true },
+  { symbol: "USDT", name: "Tether USD", decimals: 6, isNative: false },
+  { symbol: "USDC", name: "USD Coin", decimals: 6, isNative: false },
+  { symbol: "ARB", name: "Arbitrum", decimals: 18, isNative: false },
+];
+
+// NOTE: Contract addresses are commonly-known defaults; verify before production.
+const SEED_ASSET_NETWORKS: SeedAssetNetwork[] = [
+  { assetSymbol: "BTC", chainSlug: "bitcoin", contractAddress: null },
+  // Ethereum native + stables
+  { assetSymbol: "ETH", chainSlug: "ethereum", contractAddress: null },
+  { assetSymbol: "USDT", chainSlug: "ethereum", contractAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }, // ERC20
+  { assetSymbol: "USDC", chainSlug: "ethereum", contractAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
+
+  // Tron
+  { assetSymbol: "USDT", chainSlug: "tron", contractAddress: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" }, // TRC20
+
+  // BSC native + stables
+  { assetSymbol: "BNB", chainSlug: "bsc", contractAddress: null },
+  { assetSymbol: "USDT", chainSlug: "bsc", contractAddress: "0x55d398326f99059ff775485246999027b3197955" }, // BEP20
+  { assetSymbol: "USDC", chainSlug: "bsc", contractAddress: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d" }, // USDC on BSC
+
+  // Base (ETH native + USDC)
+  { assetSymbol: "ETH", chainSlug: "base", contractAddress: null },
+  { assetSymbol: "USDC", chainSlug: "base", contractAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+
+  // Arbitrum (ETH native + USDT/USDC/ARB)
+  { assetSymbol: "ETH", chainSlug: "arbitrum", contractAddress: null },
+  { assetSymbol: "USDT", chainSlug: "arbitrum", contractAddress: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9" },
+  { assetSymbol: "USDC", chainSlug: "arbitrum", contractAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" }, // USDC (native) on Arbitrum
+  { assetSymbol: "ARB", chainSlug: "arbitrum", contractAddress: "0x912CE59144191C1204E64559FE8253a0e49E6548" },
+];
+
 const DEFAULT_CHAIN_BY_SYMBOL: Record<string, { chainSlug: string; chainName: string; nativeSymbol: string; isEvm: boolean; chainId?: number; contractAddress?: string | null }> = {
   BTC: { chainSlug: "bitcoin", chainName: "Bitcoin", nativeSymbol: "BTC", isEvm: false },
   ETH: { chainSlug: "ethereum", chainName: "Ethereum", nativeSymbol: "ETH", isEvm: true, chainId: 1 },
@@ -145,6 +211,139 @@ router.get(
     } catch (err) {
       console.error("Admin list users failed:", err);
       res.status(500).json({ error: "Failed to load users", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+/**
+ * POST /admin/bootstrap/asset-networks
+ * Seed chains + assets + asset_networks for initial supported networks.
+ */
+router.post(
+  "/bootstrap/asset-networks",
+  authMiddleware,
+  requireAdmin,
+  async (_req: AuthRequest, res: Response) => {
+    try {
+      // chains
+      for (const c of SEED_CHAINS) {
+        const existing = await db
+          .select({ id: chains.id })
+          .from(chains)
+          .where(eq(chains.slug, c.slug))
+          .limit(1)
+          .then((r) => r[0]);
+        if (!existing) {
+          await db.insert(chains).values({
+            slug: c.slug,
+            name: c.name,
+            chainId: c.chainId,
+            nativeSymbol: c.nativeSymbol,
+            isEvm: c.isEvm,
+            isMainnet: true,
+          });
+        }
+      }
+
+      // assets
+      for (const a of SEED_ASSETS) {
+        const existing = await db
+          .select({ id: assets.id })
+          .from(assets)
+          .where(eq(assets.symbol, a.symbol))
+          .limit(1)
+          .then((r) => r[0]);
+        if (!existing) {
+          await db.insert(assets).values({
+            symbol: a.symbol,
+            name: a.name,
+            decimals: a.decimals,
+            isNative: a.isNative,
+          });
+        }
+      }
+
+      // asset_networks
+      for (const an of SEED_ASSET_NETWORKS) {
+        const chain = await db
+          .select({ id: chains.id })
+          .from(chains)
+          .where(eq(chains.slug, an.chainSlug))
+          .limit(1)
+          .then((r) => r[0]);
+        const asset = await db
+          .select({ id: assets.id })
+          .from(assets)
+          .where(eq(assets.symbol, an.assetSymbol))
+          .limit(1)
+          .then((r) => r[0]);
+
+        if (!chain || !asset) continue;
+
+        const existing = await db
+          .select({ id: assetNetworks.id })
+          .from(assetNetworks)
+          .where(and(eq(assetNetworks.assetId, asset.id), eq(assetNetworks.chainId, chain.id)))
+          .limit(1)
+          .then((r) => r[0]);
+        if (!existing) {
+          await db.insert(assetNetworks).values({
+            assetId: asset.id,
+            chainId: chain.id,
+            contractAddress: an.contractAddress ?? null,
+          });
+        } else if (an.contractAddress) {
+          // if row exists but contract is missing, backfill it
+          await db
+            .update(assetNetworks)
+            .set({ contractAddress: an.contractAddress })
+            .where(eq(assetNetworks.id, existing.id));
+        }
+      }
+
+      const count = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(assetNetworks)
+        .then((r) => (r as unknown as { count: number }[])[0]?.count ?? 0);
+
+      res.json({ ok: true, assetNetworks: Number(count) });
+    } catch (err) {
+      console.error("Bootstrap asset networks failed:", err);
+      res.status(500).json({ error: "Failed to bootstrap asset networks", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+/**
+ * GET /admin/asset-networks
+ * List all asset networks for admin UI selection.
+ */
+router.get(
+  "/asset-networks",
+  authMiddleware,
+  requireAdmin,
+  async (_req: AuthRequest, res: Response) => {
+    try {
+      const rows = await db
+        .select({
+          id: assetNetworks.id,
+          assetSymbol: assets.symbol,
+          assetName: assets.name,
+          chainSlug: chains.slug,
+          chainName: chains.name,
+          contractAddress: assetNetworks.contractAddress,
+          isDepositEnabled: assetNetworks.isDepositEnabled,
+          isWithdrawEnabled: assetNetworks.isWithdrawEnabled,
+        })
+        .from(assetNetworks)
+        .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
+        .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
+        .orderBy(assets.symbol, chains.slug);
+
+      res.json({ ok: true, assetNetworks: rows });
+    } catch (err) {
+      console.error("Admin list asset networks failed:", err);
+      res.status(500).json({ error: "Failed to load asset networks", code: "SERVER_ERROR" });
     }
   }
 );
@@ -367,10 +566,10 @@ router.post(
   requireAdmin,
   async (req: AuthRequest, res: Response) => {
     const userId = (req.body?.userId as string | undefined) ?? "";
+    const assetNetworkId = (req.body?.assetNetworkId as string | undefined) ?? "";
     const coin = ((req.body?.coin as string | undefined) ?? "").toUpperCase();
-    const meta = DEFAULT_CHAIN_BY_SYMBOL[coin];
-    if (!userId || !meta) {
-      res.status(400).json({ error: "Invalid userId or coin", code: "VALIDATION_FAILED" });
+    if (!userId) {
+      res.status(400).json({ error: "Invalid userId", code: "VALIDATION_FAILED" });
       return;
     }
 
@@ -385,68 +584,61 @@ router.post(
         return;
       }
 
-      let chain = await db
-        .select({ id: chains.id })
-        .from(chains)
-        .where(eq(chains.slug, meta.chainSlug))
-        .limit(1)
-        .then((r) => r[0]);
-      if (!chain) {
-        chain = await db
-          .insert(chains)
-          .values({
-            slug: meta.chainSlug,
-            name: meta.chainName,
-            chainId: meta.chainId ?? null,
-            nativeSymbol: meta.nativeSymbol,
-            isEvm: meta.isEvm,
-            isMainnet: true,
-          })
-          .returning({ id: chains.id })
+      let selectedAssetNetworkId = assetNetworkId;
+      if (selectedAssetNetworkId) {
+        const exists = await db
+          .select({ id: assetNetworks.id })
+          .from(assetNetworks)
+          .where(eq(assetNetworks.id, selectedAssetNetworkId))
+          .limit(1)
           .then((r) => r[0]);
+        if (!exists) selectedAssetNetworkId = "";
       }
 
-      let asset = await db
-        .select({ id: assets.id })
-        .from(assets)
-        .where(eq(assets.symbol, coin))
-        .limit(1)
-        .then((r) => r[0]);
-      if (!asset) {
-        asset = await db
-          .insert(assets)
-          .values({
-            symbol: coin,
-            name: coin,
-            decimals: coin === "BTC" ? 8 : coin === "USDT" ? 6 : 18,
-            isNative: coin !== "USDT",
-          })
-          .returning({ id: assets.id })
-          .then((r) => r[0]);
-      }
+      if (!selectedAssetNetworkId) {
+        // Backward-compatible: allow coin-only (defaults to ethereum/bitcoin etc).
+        const meta = DEFAULT_CHAIN_BY_SYMBOL[coin];
+        if (!meta) {
+          res.status(400).json({ error: "Invalid assetNetworkId or coin", code: "VALIDATION_FAILED" });
+          return;
+        }
 
-      let an = await db
-        .select({ id: assetNetworks.id })
-        .from(assetNetworks)
-        .where(and(eq(assetNetworks.assetId, asset.id), eq(assetNetworks.chainId, chain.id)))
-        .limit(1)
-        .then((r) => r[0]);
-      if (!an) {
-        an = await db
-          .insert(assetNetworks)
-          .values({
-            assetId: asset.id,
-            chainId: chain.id,
-            contractAddress: meta.contractAddress ?? null,
-          })
-          .returning({ id: assetNetworks.id })
+        const chain = await db
+          .select({ id: chains.id })
+          .from(chains)
+          .where(eq(chains.slug, meta.chainSlug))
+          .limit(1)
           .then((r) => r[0]);
+        const asset = await db
+          .select({ id: assets.id })
+          .from(assets)
+          .where(eq(assets.symbol, coin))
+          .limit(1)
+          .then((r) => r[0]);
+
+        if (!chain || !asset) {
+          res.status(400).json({ error: "Asset network not found; seed it first", code: "VALIDATION_FAILED" });
+          return;
+        }
+
+        const created = await db
+          .select({ id: assetNetworks.id })
+          .from(assetNetworks)
+          .where(and(eq(assetNetworks.assetId, asset.id), eq(assetNetworks.chainId, chain.id)))
+          .limit(1)
+          .then((r) => r[0]);
+
+        if (!created) {
+          res.status(400).json({ error: "Asset network not found; seed it first", code: "VALIDATION_FAILED" });
+          return;
+        }
+        selectedAssetNetworkId = created.id;
       }
 
       const existing = await db
         .select({ id: walletAccounts.id })
         .from(walletAccounts)
-        .where(and(eq(walletAccounts.userId, userId), eq(walletAccounts.assetNetworkId, an.id)))
+        .where(and(eq(walletAccounts.userId, userId), eq(walletAccounts.assetNetworkId, selectedAssetNetworkId)))
         .limit(1)
         .then((r) => r[0]);
       if (existing) {
@@ -458,7 +650,7 @@ router.post(
         .insert(walletAccounts)
         .values({
           userId,
-          assetNetworkId: an.id,
+          assetNetworkId: selectedAssetNetworkId,
           status: "pending",
         })
         .returning({
@@ -468,11 +660,20 @@ router.post(
           createdAt: walletAccounts.createdAt,
         });
 
+      const metaRow = await db
+        .select({ chainSlug: chains.slug, coin: assets.symbol })
+        .from(assetNetworks)
+        .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
+        .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
+        .where(eq(assetNetworks.id, selectedAssetNetworkId))
+        .limit(1)
+        .then((r) => r[0]);
+
       // Placeholder deposit address for MVP (real address generation comes later).
-      const addr = `pending:${meta.chainSlug}:${coin}:${wallet.id.slice(0, 8)}`;
+      const addr = `pending:${metaRow?.chainSlug ?? "chain"}:${metaRow?.coin ?? "asset"}:${wallet.id.slice(0, 8)}`;
       await db.insert(depositAddresses).values({
         userId,
-        assetNetworkId: an.id,
+        assetNetworkId: selectedAssetNetworkId,
         address: addr,
       });
 
@@ -482,7 +683,7 @@ router.post(
           id: wallet.id,
           userId,
           userName: u.name,
-          coin,
+          coin: metaRow?.coin ?? coin,
           balance: 0,
           frozen: 0,
           address: addr,

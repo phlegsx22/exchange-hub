@@ -8,6 +8,7 @@ import { getStoredAuth } from "@/lib/api";
 const navLinks = [
   { label: "Trade", path: "/trade" },
   { label: "Assets", path: "/assets" },
+  { label: "Deposit", path: "/deposit" },
   { label: "Transfer", path: "/transfer" },
   { label: "Withdraw", path: "/withdraw" },
 ];

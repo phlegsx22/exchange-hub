@@ -65,40 +65,45 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => users.filter(u => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase()) ||
-      u.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "all" || u.status === statusFilter;
-    return matchSearch && matchStatus;
-  }), [users, search, statusFilter]);
+  const totalUsers = users.length;
 
   useEffect(() => {
     let cancelled = false;
+    const t = setTimeout(() => {
+      setLoading(true);
+      setError(null);
+
+      const qs = new URLSearchParams();
+      if (search.trim()) qs.set("q", search.trim());
+      if (statusFilter !== "all") qs.set("status", statusFilter);
+      qs.set("limit", "200");
+
+      fetch(`${API_BASE}/admin/users?${qs.toString()}`, { headers: getAuthHeaders() })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
+          return data as { users: AdminUser[] };
+        })
+        .then((data) => {
+          if (cancelled) return;
+          setUsers(data.users ?? []);
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          setError(e instanceof Error ? e.message : "Failed to load users");
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoading(false);
+        });
+    }, 250);
+
     setLoading(true);
-    setError(null);
-    fetch(`${API_BASE}/admin/users`, { headers: getAuthHeaders() })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
-        return data as { users: AdminUser[] };
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setUsers(data.users ?? []);
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Failed to load users");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
-  }, []);
+  }, [search, statusFilter]);
 
   const toggleFeature = async (userId: string, feature: keyof AdminUser["features"]) => {
     const current = users.find((u) => u.id === userId);
@@ -151,7 +156,7 @@ export default function AdminUsers() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">User Management</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} of {users.length} users</p>
+          <p className="text-sm text-muted-foreground">{users.length} users</p>
         </div>
         <Button variant="outline" size="sm" className="gap-1.5">
           <Download className="h-3.5 w-3.5" /> Export
@@ -209,7 +214,7 @@ export default function AdminUsers() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map(user => (
+              {users.map(user => (
                 <TableRow key={user.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setSelectedUser(user)}>
                   <TableCell>
                     <div>

@@ -25,7 +25,9 @@ export default function AdminWallets() {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [newWalletUser, setNewWalletUser] = useState("");
-  const [newWalletCoin, setNewWalletCoin] = useState("BTC");
+  const [newWalletCoin, setNewWalletCoin] = useState("");
+  const [assetNetworks, setAssetNetworks] = useState<{ id: string; assetSymbol: string; chainSlug: string; chainName: string }[]>([]);
+  const [newWalletAssetNetworkId, setNewWalletAssetNetworkId] = useState("");
 
   const coins = useMemo(() => [...new Set(wallets.map(w => w.coin))], [wallets]);
 
@@ -53,11 +55,17 @@ export default function AdminWallets() {
         if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
         return data as { users: { id: string; name: string; status: string }[] };
       }),
+      fetch(`${API_BASE}/admin/asset-networks`, { headers: getAuthHeaders() }).then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
+        return data as { assetNetworks: { id: string; assetSymbol: string; chainSlug: string; chainName: string }[] };
+      }),
     ])
-      .then(([w, u]) => {
+      .then(([w, u, an]) => {
         if (cancelled) return;
         setWallets(w.wallets ?? []);
         setUsers(u.users ?? []);
+        setAssetNetworks(an.assetNetworks ?? []);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -109,12 +117,13 @@ export default function AdminWallets() {
 
   const createWallet = async () => {
     if (!newWalletUser) return;
+    if (!newWalletAssetNetworkId) return;
     setError(null);
     try {
       const res = await fetch(`${API_BASE}/admin/wallets`, {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ userId: newWalletUser, coin: newWalletCoin }),
+        body: JSON.stringify({ userId: newWalletUser, assetNetworkId: newWalletAssetNetworkId, coin: newWalletCoin }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
@@ -122,10 +131,29 @@ export default function AdminWallets() {
       if (wallet) setWallets((prev) => [wallet, ...prev]);
       setCreateOpen(false);
       setNewWalletUser("");
+      setNewWalletCoin("");
+      setNewWalletAssetNetworkId("");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create wallet");
     }
   };
+
+  const createCoins = useMemo(() => {
+    return Array.from(new Set(assetNetworks.map((n) => n.assetSymbol))).sort();
+  }, [assetNetworks]);
+
+  const createNetworks = useMemo(() => {
+    return assetNetworks.filter((n) => n.assetSymbol === newWalletCoin);
+  }, [assetNetworks, newWalletCoin]);
+
+  useEffect(() => {
+    if (!newWalletCoin) {
+      setNewWalletAssetNetworkId("");
+      return;
+    }
+    const first = createNetworks[0];
+    setNewWalletAssetNetworkId(first?.id ?? "");
+  }, [newWalletCoin, createNetworks]);
 
   const totalBalance = wallets.reduce((sum, w) => {
     const prices: Record<string, number> = { BTC: 97245, ETH: 3412, USDT: 1, SOL: 198, XRP: 2.41, BNB: 612, ADA: 0.98, DOGE: 0.34, AVAX: 42, LINK: 18.3 };
@@ -255,15 +283,28 @@ export default function AdminWallets() {
               <Select value={newWalletCoin} onValueChange={setNewWalletCoin}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["BTC", "ETH", "USDT", "SOL", "XRP", "BNB", "ADA", "DOGE"].map(c => (
+                  {createCoins.map((c) => (
                     <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Network</Label>
+              <Select value={newWalletAssetNetworkId} onValueChange={setNewWalletAssetNetworkId} disabled={!newWalletCoin}>
+                <SelectTrigger><SelectValue placeholder={!newWalletCoin ? "Select coin first..." : "Select network..."} /></SelectTrigger>
+                <SelectContent>
+                  {createNetworks.map((n) => (
+                    <SelectItem key={n.id} value={n.id}>
+                      {n.chainName} ({n.chainSlug})
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={createWallet} disabled={!newWalletUser}>
+            <Button onClick={createWallet} disabled={!newWalletUser || !newWalletAssetNetworkId}>
               <Wallet className="h-3.5 w-3.5 mr-1.5" /> Create Wallet
             </Button>
           </DialogFooter>
