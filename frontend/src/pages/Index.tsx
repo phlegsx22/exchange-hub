@@ -14,6 +14,8 @@ import {
 import { Area, AreaChart, ResponsiveContainer, Bar, BarChart } from "recharts";
 import logo from "@/assets/logo.png";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useBinanceTickers } from "@/hooks/useBinanceTickers";
+import type { TokenSymbol } from "@/lib/tokens";
 
 // Sparkline data generators
 const generateSparkline = (trend: "up" | "down" | "volatile") => {
@@ -275,13 +277,41 @@ function FearGreedGauge() {
   );
 }
 
+function TradingViewBtcMiniChart() {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.innerHTML = "";
+
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      symbol: "BINANCE:BTCUSDT",
+      width: "100%",
+      height: "100%",
+      locale: "en",
+      dateRange: "12M",
+      colorTheme: "dark",
+      isTransparent: true,
+      autosize: true,
+      largeChartUrl: "",
+    });
+
+    ref.current.appendChild(script);
+  }, []);
+
+  return <div ref={ref} className="h-full w-full" />;
+}
+
 export default function Index() {
-  const [btcPrice, setBtcPrice] = useState(97245.30);
   const [tradeCount, setTradeCount] = useState(1284523);
+  const tickers = useBinanceTickers(["BTC"] as TokenSymbol[]);
+  const btc = tickers.BTC;
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setBtcPrice(prev => prev + (Math.random() - 0.48) * 50);
       setTradeCount(prev => prev + Math.floor(Math.random() * 15 + 5));
     }, 2000);
     return () => clearInterval(interval);
@@ -393,22 +423,18 @@ export default function Index() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-mono font-bold">${btcPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    <p className="text-xs text-buy font-mono">+2.34%</p>
+                    <p className="font-mono font-bold">
+                      {btc?.priceUsd
+                        ? `$${btc.priceUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        : "—"}
+                    </p>
+                    <p className={`text-xs font-mono ${btc ? (btc.change24hPct >= 0 ? "text-buy" : "text-sell") : "text-muted-foreground"}`}>
+                      {btc ? `${btc.change24hPct >= 0 ? "+" : ""}${btc.change24hPct.toFixed(2)}%` : "—"}
+                    </p>
                   </div>
                 </div>
                 <div className="h-24">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={generateSparkline("up")}>
-                      <defs>
-                        <linearGradient id="btcGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(142,71%,45%)" stopOpacity={0.2} />
-                          <stop offset="100%" stopColor="hsl(142,71%,45%)" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area type="monotone" dataKey="v" stroke="hsl(142,71%,45%)" fill="url(#btcGrad)" strokeWidth={2} dot={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <TradingViewBtcMiniChart />
                 </div>
               </div>
 
