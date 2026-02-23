@@ -15,7 +15,7 @@ export const API_BASE =
 
 const NETWORK_ERROR_MESSAGE = "Network error. Please try again.";
 
-const AUTH_KEY = "exchange_auth";
+const AUTH_KEY = "exchange_auths";
 
 export interface AuthUser {
   id: string;
