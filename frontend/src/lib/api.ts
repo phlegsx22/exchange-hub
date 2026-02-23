@@ -1,7 +1,19 @@
+function defaultApiBase(): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "annex-ebank.com" || host.endsWith(".netlify.app")) {
+      return "https://api.annex-ebank.com";
+    }
+  }
+  return "http://localhost:3000";
+}
+
 export const API_BASE =
   typeof import.meta !== "undefined" && import.meta.env?.VITE_API_URL
-    ? import.meta.env.VITE_API_URL
-    : "http://localhost:3000";
+    ? String(import.meta.env.VITE_API_URL).replace(/\/+$/, "")
+    : defaultApiBase();
+
+const NETWORK_ERROR_MESSAGE = "Network error. Please try again.";
 
 const AUTH_KEY = "exchange_auth";
 
@@ -88,7 +100,7 @@ export const api = {
         body: JSON.stringify(body),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<RegisterResponse>(res);
   },
@@ -102,7 +114,7 @@ export const api = {
         body: JSON.stringify(body),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<AuthState>(res);
   },
@@ -116,7 +128,7 @@ export const api = {
         body: JSON.stringify(body),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<AuthState>(res);
   },
@@ -129,7 +141,7 @@ export const api = {
         headers: getAuthHeaders(),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     await res.json().catch(() => ({}));
     clearStoredAuth();
@@ -144,7 +156,7 @@ export const api = {
         body: JSON.stringify({ email }),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ ok: true; message: string }>(res);
   },
@@ -157,7 +169,7 @@ export const api = {
         headers: getAuthHeaders(),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{
       kycStatus: string;
@@ -180,7 +192,7 @@ export const api = {
         body: JSON.stringify({ kind }),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     const sig = await handleResponse<{
       ok: true;
@@ -238,7 +250,7 @@ export const api = {
         body: JSON.stringify(body),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ submissionId?: string; status: string; message: string }>(res);
   },
@@ -251,7 +263,7 @@ export const api = {
         headers: getAuthHeaders(),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ ok: true; assetNetworks: SupportedAssetNetwork[] }>(res);
   },
@@ -265,7 +277,7 @@ export const api = {
         body: JSON.stringify({ assetNetworkId }),
       });
     } catch {
-      throw new Error(`Cannot reach API at ${API_BASE}. Is the backend running?`);
+      throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ ok: true; address: string; memo: string | null; isPlaceholder: boolean }>(res);
   },
