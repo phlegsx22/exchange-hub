@@ -8,7 +8,7 @@ import balancesRoutes from "./routes/balances.js";
 import walletsRoutes from "./routes/wallets.js";
 
 const app = express();
-const PORT = process.env.API_PORT ?? process.env.SERVER_PORT ?? 3000;
+const PORT = process.env.PORT ?? process.env.API_PORT ?? process.env.SERVER_PORT ?? 3000;
 
 const configuredOrigins = (process.env.FRONTEND_URLS ?? process.env.FRONTEND_URL ?? "")
   .split(",")
@@ -17,10 +17,16 @@ const configuredOrigins = (process.env.FRONTEND_URLS ?? process.env.FRONTEND_URL
 
 const devDefaultOrigins = [
   "http://localhost:4173",
-  "https://annex-ebank.com/"
+  "https://annex-ebank.com",
 ];
 
-const allowedOrigins = configuredOrigins.length ? configuredOrigins : devDefaultOrigins;
+function normalizeOrigin(o: string): string {
+  return o.endsWith("/") ? o.slice(0, -1) : o;
+}
+
+const allowedOrigins = (configuredOrigins.length ? configuredOrigins : devDefaultOrigins).map(
+  normalizeOrigin
+);
 
 app.use(
   cors({
@@ -28,12 +34,13 @@ app.use(
       // allow non-browser tools (curl, server-to-server)
       if (!origin) return cb(null, true);
 
-      if (allowedOrigins.includes(origin)) return cb(null, true);
+      const normalized = normalizeOrigin(origin);
+      if (allowedOrigins.includes(normalized)) return cb(null, true);
 
       // In dev, allow localhost on any port to reduce friction.
       if (
         process.env.NODE_ENV !== "production" &&
-        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized)
       ) {
         return cb(null, true);
       }
