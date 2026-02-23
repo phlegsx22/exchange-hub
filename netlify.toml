@@ -1,6 +1,7 @@
 [build]
-command = "bun install && bun run build:frontend"
-publish = "frontend/dist"
+base = "frontend"
+command = "bun install && bun run build"
+publish = "dist"
 
 # SPA routing (React Router)
 [[redirects]]
