@@ -32,6 +32,8 @@ export interface RegisterResponse {
   user: AuthUser;
 }
 
+export type AdminRegisterResponse = AuthState;
+
 export type SupportedAssetNetwork = {
   id: string;
   assetSymbol: string;
@@ -137,6 +139,20 @@ export const api = {
       throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<AuthState>(res);
+  },
+
+  async adminRegister(body: { name: string; email: string; password: string; bootstrapSecret: string }) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/auth/admin/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<AdminRegisterResponse>(res);
   },
 
   async logout() {

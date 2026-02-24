@@ -20,6 +20,7 @@ import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import AdminOverview from "./pages/admin/AdminOverview";
 import AdminLogin from "./pages/admin/AdminLogin";
+import AdminRegister from "./pages/admin/AdminRegister";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminWallets from "./pages/admin/AdminWallets";
 import AdminFeatures from "./pages/admin/AdminFeatures";
@@ -39,6 +40,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/register" element={<AdminRegister />} />
           {/* Admin routes - no Navbar, uses AdminLayout */}
           <Route path="/admin" element={
             <RequireAdmin>

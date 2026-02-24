@@ -11,11 +11,19 @@ import {
 } from "../schemas/auth.js";
 import { signToken } from "../middleware/auth.js";
 import { sendVerificationEmail } from "../lib/email.js";
+import { z } from "zod";
 
 const router = Router();
 const SALT_ROUNDS = 10;
 const VERIFICATION_TOKEN_BYTES = 32;
 const VERIFICATION_EXPIRY_HOURS = 24;
+
+const adminRegisterSchema = z.object({
+  name: z.string().min(1).max(255),
+  email: z.string().email(),
+  password: z.string().min(8).max(128),
+  bootstrapSecret: z.string().min(1),
+});
 
 function createVerificationToken(): { token: string; expiresAt: Date } {
   const token = randomBytes(VERIFICATION_TOKEN_BYTES).toString("hex");
@@ -247,6 +255,79 @@ router.post("/admin/login", async (req: Request, res: Response) => {
   } catch (err) {
     console.error("Admin login failed:", err);
     res.status(500).json({ error: "Login failed", code: "SERVER_ERROR" });
+  }
+});
+
+/**
+ * POST /auth/admin/register
+ * Create an admin user (protected by ADMIN_BOOTSTRAP_SECRET).
+ * Does NOT require email verification for admin accounts.
+ */
+router.post("/admin/register", async (req: Request, res: Response) => {
+  const parsed = adminRegisterSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validation failed", issues: parsed.error.flatten() });
+    return;
+  }
+
+  const { name, email, password, bootstrapSecret } = parsed.data;
+
+  const expected = process.env.ADMIN_BOOTSTRAP_SECRET;
+  if (!expected) {
+    res.status(500).json({ error: "Admin bootstrap is not configured", code: "SERVER_MISCONFIG" });
+    return;
+  }
+  if (bootstrapSecret !== expected) {
+    res.status(403).json({ error: "Invalid bootstrap secret", code: "FORBIDDEN" });
+    return;
+  }
+
+  try {
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email.toLowerCase()))
+      .limit(1);
+    if (existing) {
+      res.status(409).json({ error: "Email already registered", code: "EMAIL_TAKEN" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const [user] = await db
+      .insert(users)
+      .values({
+        email: email.toLowerCase(),
+        passwordHash,
+        name: name.trim(),
+        role: "admin",
+        accountStatus: "active",
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      })
+      .returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        emailVerified: users.emailVerified,
+        kycStatus: users.kycStatus,
+        role: users.role,
+      });
+
+    if (!user) {
+      res.status(500).json({ error: "Failed to create admin", code: "SERVER_ERROR" });
+      return;
+    }
+
+    const accessToken = signToken({ sub: user.id, email: user.email });
+    res.status(201).json({
+      user,
+      accessToken,
+      expiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
+    });
+  } catch (err) {
+    console.error("Admin register failed:", err);
+    res.status(500).json({ error: "Admin registration failed", code: "SERVER_ERROR" });
   }
 });
 

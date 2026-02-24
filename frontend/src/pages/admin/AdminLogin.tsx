@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -102,14 +102,19 @@ export default function AdminLogin() {
         </form>
 
         <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t">
-          {[
-            { icon: Lock, label: "JWT secured" },
-            { icon: Shield, label: "Admin-only endpoint" },
-          ].map((b, i) => (
-            <div key={i} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <b.icon className="h-3 w-3" /> {b.label}
-            </div>
-          ))}
+          <Link to="/admin/register" className="text-xs text-muted-foreground hover:text-foreground">
+            Create admin
+          </Link>
+          <div className="flex items-center gap-4">
+            {[
+              { icon: Lock, label: "JWT secured" },
+              { icon: Shield, label: "Admin-only endpoint" },
+            ].map((b, i) => (
+              <div key={i} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <b.icon className="h-3 w-3" /> {b.label}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
