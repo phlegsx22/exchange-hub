@@ -11,9 +11,6 @@ import { DEFAULT_WATCHLIST, TOKENS } from "@/lib/tokens";
 import { TokenIcon } from "@/components/TokenIcon";
 import { useBinanceTickers } from "@/hooks/useBinanceTickers";
 import { useUserBalances } from "@/hooks/useUserBalances";
-import { getStoredAuth } from "@/lib/api";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { toast } from "@/components/ui/use-toast";
 import { useRecentActivity } from "@/hooks/useRecentActivity";
 
 const portfolioChart = Array.from({ length: 30 }, (_, i) => ({
@@ -32,27 +29,6 @@ export default function Dashboard() {
   const { balances } = useUserBalances(DEFAULT_WATCHLIST);
   const tickers = useBinanceTickers(DEFAULT_WATCHLIST);
   const recent = useRecentActivity(10);
-  const auth = getStoredAuth();
-  const user = auth?.user;
-  const displayName = user?.name ?? user?.email?.split("@")[0] ?? "User";
-  const initials = displayName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
-  const uid = user?.id ?? "";
-  const uidShort = uid ? `${uid.slice(0, 8)}…${uid.slice(-6)}` : "—";
-
-  async function copyUid() {
-    if (!uid) return;
-    try {
-      await navigator.clipboard.writeText(uid);
-      toast({ title: "Copied", description: "User ID copied to clipboard." });
-    } catch {
-      toast({ title: "Copy failed", description: "Could not copy to clipboard." });
-    }
-  }
 
   function formatRelative(iso: string): string {
     const d = new Date(iso);
@@ -197,53 +173,6 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="space-y-3">
-          {/* Profile */}
-          <div className="rounded-lg border bg-card p-3">
-            <div className="flex items-start gap-3">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className="font-semibold">{initials || "U"}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold truncate">{displayName}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email ?? ""}</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">UID</span>
-                  <code className="text-xs font-mono">{uidShort}</code>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={copyUid}
-                    disabled={!uid}
-                    aria-label="Copy user id"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <Link to="/settings">
-                <Button variant="outline" size="sm" className="w-full">Settings</Button>
-              </Link>
-              <Link to="/security">
-                <Button variant="outline" size="sm" className="w-full">2FA</Button>
-              </Link>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <Shield className="h-3.5 w-3.5" />
-                2FA: Not enabled
-              </div>
-              <Link to="/security" className="text-foreground hover:underline">
-                Set up
-              </Link>
-            </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-2">
             {[
               { label: "Deposit", icon: Wallet, path: "/deposit", color: "text-buy" },
