@@ -10,23 +10,22 @@ import walletsRoutes from "./routes/wallets.js";
 const app = express();
 const PORT = process.env.PORT ?? process.env.API_PORT ?? process.env.SERVER_PORT ?? 3000;
 
-const configuredOrigins = (process.env.FRONTEND_URLS ?? process.env.FRONTEND_URL ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-const devDefaultOrigins = [
-  "http://localhost:4173",
-  "https://annex-ebank.com",
-];
-
-function normalizeOrigin(o: string): string {
-  return o.endsWith("/") ? o.slice(0, -1) : o;
+const frontendUrl = process.env.FRONTEND_URL;
+if (!frontendUrl) {
+  throw new Error("FRONTEND_URL is required (e.g. https://annex-ebank.com)");
 }
 
-const allowedOrigins = (configuredOrigins.length ? configuredOrigins : devDefaultOrigins).map(
-  normalizeOrigin
-);
+function normalizeOrigin(o: string): string {
+  const trimmed = o.endsWith("/") ? o.slice(0, -1) : o;
+  try {
+    // If a full URL is provided, normalize to its origin.
+    return new URL(trimmed).origin;
+  } catch {
+    return trimmed;
+  }
+}
+
+const allowedOrigin = normalizeOrigin(frontendUrl);
 
 app.use(
   cors({
@@ -35,15 +34,7 @@ app.use(
       if (!origin) return cb(null, true);
 
       const normalized = normalizeOrigin(origin);
-      if (allowedOrigins.includes(normalized)) return cb(null, true);
-
-      // In dev, allow localhost on any port to reduce friction.
-      if (
-        process.env.NODE_ENV !== "production" &&
-        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(normalized)
-      ) {
-        return cb(null, true);
-      }
+      if (normalized === allowedOrigin) return cb(null, true);
 
       return cb(new Error(`CORS blocked origin: ${origin}`));
     },
@@ -63,5 +54,5 @@ app.get("/health", (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });

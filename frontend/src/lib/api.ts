@@ -1,11 +1,5 @@
 function defaultApiBase(): string {
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "annex-ebank.com" || host.endsWith(".netlify.app")) {
-      return "https://api.annex-ebank.com";
-    }
-  }
-  return "http://localhost:3000";
+  return "https://api.annex-ebank.com";
 }
 
 export const API_BASE =

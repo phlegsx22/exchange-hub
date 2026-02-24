@@ -74,7 +74,11 @@ router.post("/register", async (req: Request, res: Response) => {
       expiresAt,
     });
 
-    const baseUrl = process.env.FRONTEND_URL ?? "http://localhost:4173";
+    const baseUrl = process.env.FRONTEND_URL;
+    if (!baseUrl) {
+      res.status(500).json({ error: "FRONTEND_URL is not configured", code: "SERVER_MISCONFIG" });
+      return;
+    }
     const verificationLink = `${baseUrl}/verify-email?token=${token}`;
     await sendVerificationEmail(user.email, verificationLink);
 
@@ -337,7 +341,11 @@ router.post("/resend-verification", async (req: Request, res: Response) => {
       expiresAt,
     });
 
-    const baseUrl = process.env.FRONTEND_URL ?? "http://localhost:8080";
+    const baseUrl = process.env.FRONTEND_URL;
+    if (!baseUrl) {
+      res.status(500).json({ error: "FRONTEND_URL is not configured", code: "SERVER_MISCONFIG" });
+      return;
+    }
     const verificationLink = `${baseUrl}/verify-email?token=${token}`;
     await sendVerificationEmail(user.email, verificationLink);
 
