@@ -6,6 +6,7 @@ import kycRoutes from "./routes/kyc.js";
 import adminRoutes from "./routes/admin.js";
 import balancesRoutes from "./routes/balances.js";
 import walletsRoutes from "./routes/wallets.js";
+import activityRoutes from "./routes/activity.js";
 
 const app = express();
 const PORT = process.env.PORT ?? process.env.API_PORT ?? process.env.SERVER_PORT ?? 3000;
@@ -48,6 +49,7 @@ app.use("/kyc", kycRoutes);
 app.use("/admin", adminRoutes);
 app.use("/balances", balancesRoutes);
 app.use("/wallets", walletsRoutes);
+app.use("/activity", activityRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "exchange-hub-api" });

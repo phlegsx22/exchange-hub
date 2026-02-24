@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Send, ArrowLeftRight, TrendingUp,
   Eye, EyeOff, PieChart, Bell, Shield, ShieldCheck, Clock, Activity,
-  Zap, ChevronRight, Flame, Star, BarChart3
+  Zap, ChevronRight, Flame, Star, BarChart3, Copy
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
@@ -11,14 +11,10 @@ import { DEFAULT_WATCHLIST, TOKENS } from "@/lib/tokens";
 import { TokenIcon } from "@/components/TokenIcon";
 import { useBinanceTickers } from "@/hooks/useBinanceTickers";
 import { useUserBalances } from "@/hooks/useUserBalances";
-
-const activity = [
-  { type: "Buy", asset: "BTC", amount: "0.05 BTC", time: "2 hours ago", value: "$4,862.27" },
-  { type: "Sell", asset: "ETH", amount: "2.0 ETH", time: "5 hours ago", value: "$6,824.36" },
-  { type: "Transfer", asset: "USDT", amount: "1,000 USDT", time: "1 day ago", value: "$1,000.00" },
-  { type: "Withdraw", asset: "SOL", amount: "10 SOL", time: "2 days ago", value: "$1,984.50" },
-  { type: "Buy", asset: "DOGE", amount: "5,000 DOGE", time: "3 days ago", value: "$1,710.00" },
-];
+import { getStoredAuth } from "@/lib/api";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { toast } from "@/components/ui/use-toast";
+import { useRecentActivity } from "@/hooks/useRecentActivity";
 
 const portfolioChart = Array.from({ length: 30 }, (_, i) => ({
   day: i,
@@ -35,6 +31,78 @@ export default function Dashboard() {
   const [showBalances, setShowBalances] = useState(true);
   const { balances } = useUserBalances(DEFAULT_WATCHLIST);
   const tickers = useBinanceTickers(DEFAULT_WATCHLIST);
+  const recent = useRecentActivity(10);
+  const auth = getStoredAuth();
+  const user = auth?.user;
+  const displayName = user?.name ?? user?.email?.split("@")[0] ?? "User";
+  const initials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+  const uid = user?.id ?? "";
+  const uidShort = uid ? `${uid.slice(0, 8)}…${uid.slice(-6)}` : "—";
+
+  async function copyUid() {
+    if (!uid) return;
+    try {
+      await navigator.clipboard.writeText(uid);
+      toast({ title: "Copied", description: "User ID copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy to clipboard." });
+    }
+  }
+
+  function formatRelative(iso: string): string {
+    const d = new Date(iso);
+    const diffMs = Date.now() - d.getTime();
+    if (!Number.isFinite(diffMs)) return "—";
+    const s = Math.floor(diffMs / 1000);
+    if (s < 10) return "just now";
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const days = Math.floor(h / 24);
+    return `${days}d ago`;
+  }
+
+  const activityRows = useMemo(() => {
+    const items = recent.data ?? [];
+    return items.map((it) => {
+      const amountNum = Math.abs(Number.parseFloat(it.amount));
+      const price =
+        tickers[it.assetSymbol]?.priceUsd ?? TOKENS[it.assetSymbol as keyof typeof TOKENS]?.fixedUsdPrice ?? 0;
+      const valueUsd = price > 0 && Number.isFinite(amountNum) ? amountNum * price : null;
+
+      const label =
+        it.type === "deposit"
+          ? "Deposit"
+          : it.type === "withdrawal"
+            ? "Withdraw"
+            : it.type === "trade"
+              ? "Trade"
+              : it.type === "transfer"
+                ? "Transfer"
+                : it.type === "fee"
+                  ? "Fee"
+                  : "Adjustment";
+
+      return {
+        id: it.id,
+        label,
+        type: it.type,
+        direction: it.direction,
+        asset: it.assetSymbol,
+        chain: it.chainName,
+        time: formatRelative(it.createdAt),
+        amountText: `${amountNum.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${it.assetSymbol}`,
+        valueText: valueUsd === null ? "—" : `$${valueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+      };
+    });
+  }, [recent.data, tickers]);
   const holdings = useMemo(() => {
     const rows = DEFAULT_WATCHLIST.map((symbol) => {
       const meta = TOKENS[symbol];
@@ -91,8 +159,15 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="hidden md:flex items-center gap-2">
+          <Link to="/settings">
+            <Button variant="outline" size="sm" className="gap-1.5">Settings</Button>
+          </Link>
+          <Link to="/security">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <Shield className="h-3.5 w-3.5" /> 2FA
+            </Button>
+          </Link>
           <Button variant="outline" size="sm" className="gap-1.5"><Bell className="h-3.5 w-3.5" /> Alerts</Button>
-          <Button variant="outline" size="sm" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Security</Button>
         </div>
       </div>
 
@@ -122,9 +197,56 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="space-y-3">
+          {/* Profile */}
+          <div className="rounded-lg border bg-card p-3">
+            <div className="flex items-start gap-3">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="font-semibold">{initials || "U"}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold truncate">{displayName}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email ?? ""}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">UID</span>
+                  <code className="text-xs font-mono">{uidShort}</code>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={copyUid}
+                    disabled={!uid}
+                    aria-label="Copy user id"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Link to="/settings">
+                <Button variant="outline" size="sm" className="w-full">Settings</Button>
+              </Link>
+              <Link to="/security">
+                <Button variant="outline" size="sm" className="w-full">2FA</Button>
+              </Link>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5" />
+                2FA: Not enabled
+              </div>
+              <Link to="/security" className="text-foreground hover:underline">
+                Set up
+              </Link>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-2">
             {[
-              { label: "Deposit", icon: Wallet, path: "/assets", color: "text-buy" },
+              { label: "Deposit", icon: Wallet, path: "/deposit", color: "text-buy" },
               { label: "Withdraw", icon: Send, path: "/withdraw", color: "text-sell" },
               { label: "Transfer", icon: ArrowLeftRight, path: "/transfer", color: "text-foreground" },
               { label: "Trade", icon: TrendingUp, path: "/trade", color: "text-foreground" },
@@ -230,30 +352,57 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold">Recent Activity</h2>
           </div>
         </div>
-        <div className="space-y-2">
-          {activity.map((a, i) => (
-            <div key={i} className="flex items-center justify-between p-4 rounded-lg border hover:shadow-sm transition-all">
-              <div className="flex items-center gap-3">
-                <div className={`h-9 w-9 rounded-full flex items-center justify-center ${
-                  a.type === "Buy" ? "bg-buy/10" : a.type === "Sell" ? "bg-sell/10" : "bg-muted"
-                }`}>
-                  {a.type === "Buy" ? <ArrowDownRight className="h-4 w-4 text-buy" /> :
-                   a.type === "Sell" ? <ArrowUpRight className="h-4 w-4 text-sell" /> :
-                   a.type === "Transfer" ? <ArrowLeftRight className="h-4 w-4" /> :
-                   <Send className="h-4 w-4" />}
-                </div>
-                <div>
-                  <p className="font-medium text-sm">{a.type} {a.asset}</p>
-                  <p className="text-xs text-muted-foreground">{a.time}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-mono text-sm font-medium">{a.value}</p>
-                <p className="text-xs text-muted-foreground font-mono">{a.amount}</p>
-              </div>
+        {recent.isLoading ? (
+          <div className="rounded-lg border bg-card p-6">
+            <p className="text-sm font-medium">Loading activity…</p>
+            <p className="mt-1 text-xs text-muted-foreground">Fetching your latest account events.</p>
+          </div>
+        ) : activityRows.length === 0 ? (
+          <div className="rounded-lg border bg-card p-6 text-center">
+            <p className="text-sm font-medium">No activity yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Deposits, trades, transfers, and withdrawals will appear here.
+            </p>
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
+              <Link to="/deposit">
+                <Button size="sm" className="gap-1.5">
+                  <Wallet className="h-3.5 w-3.5" /> Make a deposit
+                </Button>
+              </Link>
+              <Link to="/trade">
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <TrendingUp className="h-3.5 w-3.5" /> Start trading
+                </Button>
+              </Link>
             </div>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {activityRows.map((a) => (
+              <div key={a.id} className="flex items-center justify-between p-4 rounded-lg border hover:shadow-sm transition-all">
+                <div className="flex items-center gap-3">
+                  <div className={`h-9 w-9 rounded-full flex items-center justify-center ${
+                    a.type === "deposit" ? "bg-buy/10" : a.type === "withdrawal" ? "bg-sell/10" : "bg-muted"
+                  }`}>
+                    {a.type === "deposit" ? <ArrowDownRight className="h-4 w-4 text-buy" /> :
+                     a.type === "withdrawal" ? <ArrowUpRight className="h-4 w-4 text-sell" /> :
+                     a.type === "transfer" ? <ArrowLeftRight className="h-4 w-4" /> :
+                     a.type === "trade" ? <TrendingUp className="h-4 w-4" /> :
+                     <Send className="h-4 w-4" />}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">{a.label} {a.asset}</p>
+                    <p className="text-xs text-muted-foreground">{a.time}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono text-sm font-medium">{a.valueText}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{a.amountText}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom bar */}

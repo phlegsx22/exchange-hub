@@ -42,6 +42,18 @@ export type SupportedAssetNetwork = {
   isWithdrawEnabled: boolean;
 };
 
+export type RecentActivityItem = {
+  id: string;
+  type: "deposit" | "withdrawal" | "trade" | "transfer" | "fee" | "adjustment";
+  direction: "in" | "out";
+  amount: string;
+  assetSymbol: string;
+  chainSlug: string;
+  chainName: string;
+  description: string | null;
+  createdAt: string; // ISO string
+};
+
 export function getStoredAuth(): AuthState | null {
   try {
     const raw = localStorage.getItem(AUTH_KEY);
@@ -274,5 +286,18 @@ export const api = {
       throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ ok: true; address: string; memo: string | null; isPlaceholder: boolean }>(res);
+  },
+
+  async recentActivity(params?: { limit?: number }) {
+    const limit = params?.limit ?? 10;
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/activity/recent?limit=${encodeURIComponent(String(limit))}`, {
+        headers: getAuthHeaders(),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ ok: true; activity: RecentActivityItem[] }>(res);
   },
 };

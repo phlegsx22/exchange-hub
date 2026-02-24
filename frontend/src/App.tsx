@@ -16,6 +16,8 @@ import Deposit from "./pages/Deposit";
 import Withdraw from "./pages/Withdraw";
 import Transfer from "./pages/Transfer";
 import Trade from "./pages/Trade";
+import Settings from "./pages/Settings";
+import Security from "./pages/Security";
 import NotFound from "./pages/NotFound";
 import AdminOverview from "./pages/admin/AdminOverview";
 import AdminLogin from "./pages/admin/AdminLogin";
@@ -70,6 +72,8 @@ const App = () => (
                 <Route path="/withdraw" element={<RequireVerified><Withdraw /></RequireVerified>} />
                 <Route path="/transfer" element={<RequireVerified><Transfer /></RequireVerified>} />
                 <Route path="/trade" element={<RequireVerified><Trade /></RequireVerified>} />
+                <Route path="/settings" element={<RequireVerified><Settings /></RequireVerified>} />
+                <Route path="/security" element={<RequireVerified><Security /></RequireVerified>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </>
