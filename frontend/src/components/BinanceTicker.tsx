@@ -11,6 +11,38 @@ declare global {
   }
 }
 
+const BINANCE_WIDGET_SRC =
+  "https://public.bnbstatic.com/unpkg/growth-widget/cryptoCurrencyWidget@0.0.24.min.js";
+let widgetScriptPromise: Promise<void> | null = null;
+
+function ensureWidgetScript(): Promise<void> {
+  if (window.BinanceWidget) return Promise.resolve();
+  if (widgetScriptPromise) return widgetScriptPromise;
+
+  widgetScriptPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(
+      `script[src="${BINANCE_WIDGET_SRC}"]`
+    );
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Failed to load Binance widget")), {
+        once: true,
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = BINANCE_WIDGET_SRC;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Binance widget"));
+    document.body.appendChild(script);
+  });
+
+  return widgetScriptPromise;
+}
+
 export function BinanceTicker({ theme = "dark", transparent = false }: BinanceTickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -33,14 +65,39 @@ export function BinanceTicker({ theme = "dark", transparent = false }: BinanceTi
 
     containerRef.current.appendChild(widgetDiv);
 
-    // Re-trigger the widget script
-    if (window.BinanceWidget) {
-      try {
-        window.BinanceWidget.init();
-      } catch {
-        // Widget may self-init
-      }
+    let cancelled = false;
+    let idleId: number | null = null;
+    let timeoutId: number | null = null;
+
+    const initWidget = () => {
+      ensureWidgetScript()
+        .then(() => {
+          if (cancelled) return;
+          if (window.BinanceWidget) {
+            try {
+              window.BinanceWidget.init();
+            } catch {
+              // Widget may self-init.
+            }
+          }
+        })
+        .catch(() => {
+          // Ignore third-party widget load errors to avoid breaking homepage render.
+        });
+    };
+
+    // Delay third-party widget work until browser is idle.
+    if (window.requestIdleCallback) {
+      idleId = window.requestIdleCallback(initWidget);
+    } else {
+      timeoutId = window.setTimeout(initWidget, 200);
     }
+
+    return () => {
+      cancelled = true;
+      if (idleId !== null && window.cancelIdleCallback) window.cancelIdleCallback(idleId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
   }, [theme, transparent]);
 
   return <div ref={containerRef} className="w-full overflow-hidden" />;
