@@ -109,7 +109,7 @@ router.post("/register", async (req: Request, res: Response) => {
 /**
  * POST /auth/login
  * User login endpoint - ONLY for regular users (role = "user").
- * Admins must use /auth/admin/login.
+ * For non-user roles, return generic invalid credentials (no role leakage).
  */
 router.post("/login", async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
@@ -139,12 +139,10 @@ router.post("/login", async (req: Request, res: Response) => {
       return;
     }
 
-    // SECURITY: Block admin/support accounts from using user login endpoint
+    // SECURITY: Block non-user roles from using user login endpoint.
+    // Keep response generic to avoid leaking role or admin portal details.
     if (user.role !== "user") {
-      res.status(403).json({
-        error: "Please use the admin login portal",
-        code: "WRONG_LOGIN_PORTAL",
-      });
+      res.status(401).json({ error: "Invalid email or password", code: "INVALID_CREDENTIALS" });
       return;
     }
 

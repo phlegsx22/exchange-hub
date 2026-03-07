@@ -52,11 +52,6 @@ export default function Login() {
         navigate(`/verify-email?email=${encodeURIComponent(email.trim())}`, { replace: true });
         return;
       }
-      if (code === "WRONG_LOGIN_PORTAL") {
-        // Admin trying to use user login - redirect to admin login
-        navigate("/admin/login", { replace: true });
-        return;
-      }
       setError(msg);
     } finally {
       setSubmitting(false);
