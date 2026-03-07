@@ -202,6 +202,23 @@ export const api = {
     clearStoredAuth();
   },
 
+  /**
+   * Validate current session and get fresh user data from server.
+   * This is the source of truth - never trust localStorage alone.
+   */
+  async me(): Promise<{ user: AuthUser }> {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/auth/me`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ user: AuthUser }>(res);
+  },
+
   async resendVerification(email: string) {
     let res: Response;
     try {

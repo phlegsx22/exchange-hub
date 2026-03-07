@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { api, getStoredAuth } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 export function useRecentActivity(limit: number = 10) {
-  const auth = getStoredAuth();
+  const { user, accessToken } = useAuth();
 
   return useQuery({
-    queryKey: ["recent-activity", auth?.user?.id ?? null, limit],
-    enabled: !!auth?.accessToken,
+    queryKey: ["recent-activity", user?.id ?? null, limit],
+    enabled: !!accessToken,
     queryFn: async () => {
       const data = await api.recentActivity({ limit });
       return data.activity;
@@ -15,4 +16,3 @@ export function useRecentActivity(limit: number = 10) {
     refetchInterval: 15_000,
   });
 }
-

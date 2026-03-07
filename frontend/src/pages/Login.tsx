@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Shield, Lock, ArrowRight, ShieldCheck, Fingerprint, Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { useState, useEffect } from "react";
-import { api, setStoredAuth } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 const liveTrades = [
   "User ***42 just bought 0.5 BTC",
@@ -16,6 +17,7 @@ const liveTrades = [
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -40,7 +42,8 @@ export default function Login() {
     setSubmitting(true);
     try {
       const data = await api.login({ email: email.trim(), password });
-      setStoredAuth(data);
+      // Use AuthContext login to properly set state
+      login(data.user, data.accessToken);
       navigate("/dashboard", { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Login failed.";

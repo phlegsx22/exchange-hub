@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { AuthProvider } from "@/context/AuthContext";
 import { Navbar } from "@/components/Navbar";
 import { AdminLayout } from "@/components/AdminLayout";
 import Index from "./pages/Index";
@@ -29,7 +30,7 @@ import AdminLogs from "./pages/admin/AdminLogs";
 import AdminBlacklist from "./pages/admin/AdminBlacklist";
 import AdminAlerts from "./pages/admin/AdminAlerts";
 import AdminSettings from "./pages/admin/AdminSettings";
-import { RequireAdmin, RequireVerified } from "@/components/RouteGuards";
+import { RequireAdmin, RequireVerified, RedirectIfAuthenticated } from "@/components/RouteGuards";
 
 const queryClient = new QueryClient();
 
@@ -48,110 +49,145 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/register" element={<AdminRegister />} />
-          {/* Admin routes - protected, no public Navbar */}
-          <Route
-            path="/admin"
-            element={
-              <RequireAdmin>
-                <AdminLayout />
-              </RequireAdmin>
-            }
-          >
-            <Route index element={<AdminOverview />} />
-            <Route path="users" element={<AdminUsers />} />
-            <Route path="wallets" element={<AdminWallets />} />
-            <Route path="assets" element={<AdminAssets />} />
-            <Route path="features" element={<AdminFeatures />} />
-            <Route path="logs" element={<AdminLogs />} />
-            <Route path="blacklist" element={<AdminBlacklist />} />
-            <Route path="alerts" element={<AdminAlerts />} />
-            <Route path="settings" element={<AdminSettings />} />
-          </Route>
+        <AuthProvider>
+          <Routes>
+            {/* Admin auth routes - redirect if already logged in as admin */}
+            <Route
+              path="/admin/login"
+              element={
+                <RedirectIfAuthenticated>
+                  <AdminLogin />
+                </RedirectIfAuthenticated>
+              }
+            />
+            <Route
+              path="/admin/register"
+              element={
+                <RedirectIfAuthenticated>
+                  <AdminRegister />
+                </RedirectIfAuthenticated>
+              }
+            />
 
-          {/* Public + user routes with navbar */}
-          <Route element={<PublicLayout />}>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
+            {/* Admin routes - strictly protected, only admins */}
             <Route
-              path="/kyc"
+              path="/admin"
               element={
-                <RequireVerified>
-                  <KYC />
-                </RequireVerified>
+                <RequireAdmin>
+                  <AdminLayout />
+                </RequireAdmin>
               }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <RequireVerified>
-                  <Dashboard />
-                </RequireVerified>
-              }
-            />
-            <Route
-              path="/assets"
-              element={
-                <RequireVerified>
-                  <Assets />
-                </RequireVerified>
-              }
-            />
-            <Route
-              path="/deposit"
-              element={
-                <RequireVerified>
-                  <Deposit />
-                </RequireVerified>
-              }
-            />
-            <Route
-              path="/withdraw"
-              element={
-                <RequireVerified>
-                  <Withdraw />
-                </RequireVerified>
-              }
-            />
-            <Route
-              path="/transfer"
-              element={
-                <RequireVerified>
-                  <Transfer />
-                </RequireVerified>
-              }
-            />
-            <Route
-              path="/trade"
-              element={
-                <RequireVerified>
-                  <Trade />
-                </RequireVerified>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <RequireVerified>
-                  <Profile />
-                </RequireVerified>
-              }
-            />
-            <Route
-              path="/security"
-              element={
-                <RequireVerified>
-                  <Profile />
-                </RequireVerified>
-              }
-            />
-            <Route path="*" element={<NotFound />} />
-          </Route>
-        </Routes>
+            >
+              <Route index element={<AdminOverview />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="wallets" element={<AdminWallets />} />
+              <Route path="assets" element={<AdminAssets />} />
+              <Route path="features" element={<AdminFeatures />} />
+              <Route path="logs" element={<AdminLogs />} />
+              <Route path="blacklist" element={<AdminBlacklist />} />
+              <Route path="alerts" element={<AdminAlerts />} />
+              <Route path="settings" element={<AdminSettings />} />
+            </Route>
+
+            {/* Public + user routes with navbar */}
+            <Route element={<PublicLayout />}>
+              <Route path="/" element={<Index />} />
+              {/* Auth routes - redirect if already logged in */}
+              <Route
+                path="/login"
+                element={
+                  <RedirectIfAuthenticated>
+                    <Login />
+                  </RedirectIfAuthenticated>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <RedirectIfAuthenticated>
+                    <Register />
+                  </RedirectIfAuthenticated>
+                }
+              />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+
+              {/* User routes - require verified email, no admins */}
+              <Route
+                path="/kyc"
+                element={
+                  <RequireVerified>
+                    <KYC />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <RequireVerified>
+                    <Dashboard />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/assets"
+                element={
+                  <RequireVerified>
+                    <Assets />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/deposit"
+                element={
+                  <RequireVerified>
+                    <Deposit />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/withdraw"
+                element={
+                  <RequireVerified>
+                    <Withdraw />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/transfer"
+                element={
+                  <RequireVerified>
+                    <Transfer />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/trade"
+                element={
+                  <RequireVerified>
+                    <Trade />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <RequireVerified>
+                    <Profile />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/security"
+                element={
+                  <RequireVerified>
+                    <Profile />
+                  </RequireVerified>
+                }
+              />
+              <Route path="*" element={<NotFound />} />
+            </Route>
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

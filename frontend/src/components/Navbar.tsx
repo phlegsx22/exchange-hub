@@ -1,9 +1,9 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogOut } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { useState } from "react";
-import { getStoredAuth } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 const navLinks = [
   { label: "Trade", path: "/trade" },
@@ -15,11 +15,23 @@ const navLinks = [
 
 export function Navbar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const auth = getStoredAuth();
-  const isLoggedIn = !!auth?.accessToken;
-  const isAdmin = auth?.user?.role === "admin";
+  const { status, user, isAdmin, logout } = useAuth();
+
+  const isLoggedIn = status === "authenticated" && !!user;
   const isLanding = location.pathname === "/";
+
+  const handleLogout = async () => {
+    setMobileOpen(false);
+    await logout();
+    navigate("/", { replace: true });
+  };
+
+  // Don't show user nav on landing page - keep it clean
+  const showUserNav = isLoggedIn && !isLanding && !isAdmin;
+  // Only show admin button to admins, and not on landing
+  const showAdminButton = isLoggedIn && isAdmin && !isLanding;
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -29,9 +41,9 @@ export function Navbar() {
           <span>Annex-Ebank</span>
         </Link>
 
-        {/* Desktop nav */}
+        {/* Desktop nav - only for regular users, not on landing */}
         <nav className="hidden md:flex items-center gap-1">
-          {isLoggedIn && navLinks.map((link) => (
+          {showUserNav && navLinks.map((link) => (
             <Link
               key={link.path}
               to={link.path}
@@ -47,20 +59,29 @@ export function Navbar() {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
-          {isLoggedIn && !isLanding ? (
+          {showUserNav ? (
             <div className="flex items-center gap-2">
-              {isAdmin && (
-                <Link to="/admin">
-                  <Button variant={location.pathname.startsWith("/admin") ? "default" : "outline"} size="sm">
-                    Admin
-                  </Button>
-                </Link>
-              )}
               <Link to="/dashboard">
                 <Button variant={location.pathname === "/dashboard" ? "default" : "outline"} size="sm">
                   Dashboard
                 </Button>
               </Link>
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-1.5">
+                <LogOut className="h-3.5 w-3.5" />
+                Logout
+              </Button>
+            </div>
+          ) : showAdminButton ? (
+            <div className="flex items-center gap-2">
+              <Link to="/admin">
+                <Button variant={location.pathname.startsWith("/admin") ? "default" : "outline"} size="sm">
+                  Admin Panel
+                </Button>
+              </Link>
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-1.5">
+                <LogOut className="h-3.5 w-3.5" />
+                Logout
+              </Button>
             </div>
           ) : !isLoggedIn ? (
             <>
@@ -71,8 +92,7 @@ export function Navbar() {
                 <Button size="sm">Sign Up</Button>
               </Link>
             </>
-          ) : null
-          }
+          ) : null}
         </div>
 
         {/* Mobile toggle */}
@@ -84,7 +104,7 @@ export function Navbar() {
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="md:hidden border-t bg-background p-4 space-y-2">
-          {isLoggedIn && navLinks.map((link) => (
+          {showUserNav && navLinks.map((link) => (
             <Link
               key={link.path}
               to={link.path}
@@ -94,19 +114,28 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
-          {isLoggedIn && !isLanding ? (
-            <div className="space-y-2">
-              {isAdmin && (
-                <Link to="/admin" onClick={() => setMobileOpen(false)}>
-                  <Button className="w-full" size="sm" variant="outline">Admin</Button>
-                </Link>
-              )}
+          {showUserNav ? (
+            <div className="space-y-2 pt-2 border-t">
               <Link to="/dashboard" onClick={() => setMobileOpen(false)}>
                 <Button className="w-full" size="sm">Dashboard</Button>
               </Link>
+              <Button className="w-full" size="sm" variant="outline" onClick={handleLogout}>
+                <LogOut className="h-3.5 w-3.5 mr-1.5" />
+                Logout
+              </Button>
+            </div>
+          ) : showAdminButton ? (
+            <div className="space-y-2 pt-2 border-t">
+              <Link to="/admin" onClick={() => setMobileOpen(false)}>
+                <Button className="w-full" size="sm">Admin Panel</Button>
+              </Link>
+              <Button className="w-full" size="sm" variant="outline" onClick={handleLogout}>
+                <LogOut className="h-3.5 w-3.5 mr-1.5" />
+                Logout
+              </Button>
             </div>
           ) : !isLoggedIn ? (
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-2 border-t">
               <Link to="/login" className="flex-1" onClick={() => setMobileOpen(false)}>
                 <Button variant="outline" size="sm" className="w-full">Log In</Button>
               </Link>

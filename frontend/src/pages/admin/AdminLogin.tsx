@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Eye, EyeOff, ArrowRight, Lock } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { api, setStoredAuth } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,7 +30,8 @@ export default function AdminLogin() {
       if (data.user?.role !== "admin") {
         throw new Error("This account is not an admin.");
       }
-      setStoredAuth(data);
+      // Use AuthContext login to properly set state
+      login(data.user, data.accessToken);
       navigate("/admin", { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Login failed.";

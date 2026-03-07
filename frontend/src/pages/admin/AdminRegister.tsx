@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Eye, EyeOff, ArrowRight, Lock, KeyRound } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { api, setStoredAuth } from "@/lib/api";
+import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminRegister() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,7 +49,8 @@ export default function AdminRegister() {
       if (data.user?.role !== "admin") {
         throw new Error("Admin registration failed.");
       }
-      setStoredAuth(data);
+      // Use AuthContext login to properly set state
+      login(data.user, data.accessToken);
       navigate("/admin", { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Registration failed.";

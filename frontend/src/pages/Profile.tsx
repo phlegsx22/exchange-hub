@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { getStoredAuth, setStoredAuth } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import {
   User,
   Shield,
@@ -35,9 +35,7 @@ type TabKey = "general" | "security" | "notifications";
 export default function Profile() {
   const location = useLocation();
   const { toast } = useToast();
-
-  const auth = useMemo(() => getStoredAuth(), []);
-  const user = auth?.user;
+  const { user } = useAuth();
 
   const defaultTab: TabKey = location.pathname === "/security" ? "security" : "general";
 
@@ -72,16 +70,13 @@ export default function Profile() {
   }
 
   function handleSaveName() {
-    const current = getStoredAuth();
-    if (!current) return;
-    setStoredAuth({
-      ...current,
-      user: {
-        ...current.user,
-        name: displayName.trim() || current.user.name,
-      },
+    // TODO: Implement backend endpoint for profile updates
+    // For now, this is just a placeholder that shows a toast
+    if (!displayName.trim()) return;
+    toast({ 
+      title: "Profile update coming soon", 
+      description: "Backend profile update endpoint not yet implemented." 
     });
-    toast({ title: "Display name updated", description: `Name set to "${displayName.trim() || current.user.name}"` });
   }
 
   function handleChangeEmail() {
