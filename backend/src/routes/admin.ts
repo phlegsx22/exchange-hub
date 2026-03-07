@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import { z } from "zod";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { requireAdmin, authMiddleware } from "../middleware/auth.js";
 import type { AuthRequest } from "../middleware/auth.js";
@@ -11,6 +12,9 @@ import {
   depositAddresses,
   ledgerEntries,
   walletAccounts,
+  kycSubmissions,
+  deposits,
+  withdrawals,
 } from "../db/index.js";
 
 const router = Router();
@@ -142,6 +146,64 @@ function toAdminUserRow(u: {
   };
 }
 
+const regularUsersWhere = eq(users.role, "user");
+
+router.get(
+  "/overview",
+  authMiddleware,
+  requireAdmin,
+  async (_req: AuthRequest, res: Response) => {
+    try {
+      const [{ totalUsers }] = await db
+        .select({ totalUsers: sql<number>`count(*)::int` })
+        .from(users)
+        .where(regularUsersWhere)
+        .then((r) => r as unknown as { totalUsers: number }[]);
+
+      const [{ activeWallets }] = await db
+        .select({ activeWallets: sql<number>`count(*)::int` })
+        .from(walletAccounts)
+        .where(eq(walletAccounts.status, "active"))
+        .then((r) => r as unknown as { activeWallets: number }[]);
+
+      const [{ pendingKyc }] = await db
+        .select({ pendingKyc: sql<number>`count(*)::int` })
+        .from(users)
+        .where(
+          and(
+            regularUsersWhere,
+            or(eq(users.kycStatus, "pending"), eq(users.kycStatus, "under_review"))
+          )
+        )
+        .then((r) => r as unknown as { pendingKyc: number }[]);
+
+      const [{ blacklisted }] = await db
+        .select({ blacklisted: sql<number>`count(*)::int` })
+        .from(users)
+        .where(and(regularUsersWhere, eq(users.accountStatus, "blacklisted")))
+        .then((r) => r as unknown as { blacklisted: number }[]);
+
+      const [{ suspended }] = await db
+        .select({ suspended: sql<number>`count(*)::int` })
+        .from(users)
+        .where(and(regularUsersWhere, eq(users.accountStatus, "suspended")))
+        .then((r) => r as unknown as { suspended: number }[]);
+
+      res.json({
+        ok: true,
+        totalUsers: Number(totalUsers ?? 0),
+        activeWallets: Number(activeWallets ?? 0),
+        pendingKyc: Number(pendingKyc ?? 0),
+        blacklisted: Number(blacklisted ?? 0),
+        suspended: Number(suspended ?? 0),
+      });
+    } catch (err) {
+      console.error("Admin overview failed:", err);
+      res.status(500).json({ error: "Failed to load overview", code: "SERVER_ERROR" });
+    }
+  }
+);
+
 router.get(
   "/users",
   authMiddleware,
@@ -155,23 +217,19 @@ router.get(
     const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
 
     try {
-      const whereParts = [];
+      const whereParts = [regularUsersWhere];
 
       if (q) {
         const like = `%${q}%`;
-        whereParts.push(or(ilike(users.email, like), ilike(users.name, like), ilike(users.id, like)));
+        const searchWhere = or(ilike(users.email, like), ilike(users.name, like), ilike(users.id, like));
+        if (searchWhere) whereParts.push(searchWhere);
       }
 
       if (status && ["active", "suspended", "pending", "blacklisted"].includes(status)) {
         whereParts.push(eq(users.accountStatus, status as typeof users.accountStatus.enumValues[number]));
       }
 
-      const where =
-        whereParts.length === 0
-          ? undefined
-          : whereParts.length === 1
-            ? whereParts[0]
-            : and(...whereParts);
+      const where = and(...whereParts);
 
       const rows = await db
         .select({
@@ -215,18 +273,59 @@ router.get(
   }
 );
 
+router.get(
+  "/seed-options",
+  authMiddleware,
+  requireAdmin,
+  async (_req: AuthRequest, res: Response) => {
+    const options = SEED_ASSET_NETWORKS.map((an) => {
+      const chain = SEED_CHAINS.find((c) => c.slug === an.chainSlug);
+      const asset = SEED_ASSETS.find((a) => a.symbol === an.assetSymbol);
+      return {
+        assetSymbol: an.assetSymbol,
+        assetName: asset?.name ?? an.assetSymbol,
+        chainSlug: an.chainSlug,
+        chainName: chain?.name ?? an.chainSlug,
+        contractAddress: an.contractAddress ?? null,
+      };
+    });
+    res.json({ ok: true, options });
+  }
+);
+
+const seedSelectionSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        assetSymbol: z.string().min(1).max(20),
+        chainSlug: z.string().min(1).max(64),
+        contractAddress: z.string().max(66).nullable().optional(),
+      })
+    )
+    .min(1),
+});
+
 /**
  * POST /admin/bootstrap/asset-networks
- * Seed chains + assets + asset_networks for initial supported networks.
+ * Add only selected asset+network rows from admin UI.
  */
 router.post(
   "/bootstrap/asset-networks",
   authMiddleware,
   requireAdmin,
-  async (_req: AuthRequest, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
+    const parsed = seedSelectionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", issues: parsed.error.flatten(), code: "VALIDATION_FAILED" });
+      return;
+    }
+    const selected = parsed.data.items;
+
     try {
-      // chains
-      for (const c of SEED_CHAINS) {
+      const chainSlugs = new Set(selected.map((s) => s.chainSlug));
+      const assetSymbols = new Set(selected.map((s) => s.assetSymbol));
+
+      for (const c of SEED_CHAINS.filter((x) => chainSlugs.has(x.slug))) {
         const existing = await db
           .select({ id: chains.id })
           .from(chains)
@@ -245,8 +344,7 @@ router.post(
         }
       }
 
-      // assets
-      for (const a of SEED_ASSETS) {
+      for (const a of SEED_ASSETS.filter((x) => assetSymbols.has(x.symbol))) {
         const existing = await db
           .select({ id: assets.id })
           .from(assets)
@@ -263,22 +361,31 @@ router.post(
         }
       }
 
-      // asset_networks
-      for (const an of SEED_ASSET_NETWORKS) {
+      let added = 0;
+      let skipped = 0;
+      for (const row of selected) {
+        const preset = SEED_ASSET_NETWORKS.find(
+          (x) => x.assetSymbol === row.assetSymbol && x.chainSlug === row.chainSlug
+        );
+        const contractAddress = preset?.contractAddress ?? row.contractAddress ?? null;
+
         const chain = await db
           .select({ id: chains.id })
           .from(chains)
-          .where(eq(chains.slug, an.chainSlug))
+          .where(eq(chains.slug, row.chainSlug))
           .limit(1)
           .then((r) => r[0]);
         const asset = await db
           .select({ id: assets.id })
           .from(assets)
-          .where(eq(assets.symbol, an.assetSymbol))
+          .where(eq(assets.symbol, row.assetSymbol))
           .limit(1)
           .then((r) => r[0]);
 
-        if (!chain || !asset) continue;
+        if (!chain || !asset) {
+          skipped++;
+          continue;
+        }
 
         const existing = await db
           .select({ id: assetNetworks.id })
@@ -290,26 +397,23 @@ router.post(
           await db.insert(assetNetworks).values({
             assetId: asset.id,
             chainId: chain.id,
-            contractAddress: an.contractAddress ?? null,
+            contractAddress,
           });
-        } else if (an.contractAddress) {
-          // if row exists but contract is missing, backfill it
+          added++;
+        } else if (contractAddress) {
           await db
             .update(assetNetworks)
-            .set({ contractAddress: an.contractAddress })
+            .set({ contractAddress })
             .where(eq(assetNetworks.id, existing.id));
+          skipped++;
+        } else {
+          skipped++;
         }
       }
-
-      const count = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(assetNetworks)
-        .then((r) => (r as unknown as { count: number }[])[0]?.count ?? 0);
-
-      res.json({ ok: true, assetNetworks: Number(count) });
+      res.json({ ok: true, added, skipped });
     } catch (err) {
       console.error("Bootstrap asset networks failed:", err);
-      res.status(500).json({ error: "Failed to bootstrap asset networks", code: "SERVER_ERROR" });
+      res.status(500).json({ error: "Failed to add selected asset networks", code: "SERVER_ERROR" });
     }
   }
 );
@@ -344,6 +448,176 @@ router.get(
     } catch (err) {
       console.error("Admin list asset networks failed:", err);
       res.status(500).json({ error: "Failed to load asset networks", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+router.get(
+  "/logs",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+    const severity = typeof req.query.severity === "string" ? req.query.severity.trim().toLowerCase() : "all";
+    const limitRaw = typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+    const offsetRaw = typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+
+    try {
+      const userEvents = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(eq(users.role, "user"))
+        .orderBy(desc(users.createdAt))
+        .limit(120);
+
+      const kycEvents = await db
+        .select({
+          id: kycSubmissions.id,
+          status: kycSubmissions.status,
+          submittedAt: kycSubmissions.submittedAt,
+          userName: users.name,
+          userEmail: users.email,
+        })
+        .from(kycSubmissions)
+        .innerJoin(users, eq(kycSubmissions.userId, users.id))
+        .orderBy(desc(kycSubmissions.submittedAt))
+        .limit(120);
+
+      const depositEvents = await db
+        .select({
+          id: deposits.id,
+          status: deposits.status,
+          amount: deposits.amount,
+          createdAt: deposits.createdAt,
+          userName: users.name,
+          userEmail: users.email,
+        })
+        .from(deposits)
+        .innerJoin(users, eq(deposits.userId, users.id))
+        .orderBy(desc(deposits.createdAt))
+        .limit(120);
+
+      const withdrawalEvents = await db
+        .select({
+          id: withdrawals.id,
+          status: withdrawals.status,
+          amount: withdrawals.amount,
+          createdAt: withdrawals.createdAt,
+          userName: users.name,
+          userEmail: users.email,
+        })
+        .from(withdrawals)
+        .innerJoin(users, eq(withdrawals.userId, users.id))
+        .orderBy(desc(withdrawals.createdAt))
+        .limit(120);
+
+      const logs = [
+        ...userEvents.map((e) => ({
+          id: `usr-${e.id}`,
+          timestamp: e.createdAt.toISOString(),
+          action: "User registered",
+          actor: "system",
+          target: `${e.name} (${e.email})`,
+          details: "New user account created",
+          severity: "info" as const,
+          ip: "—",
+        })),
+        ...kycEvents.map((e) => ({
+          id: `kyc-${e.id}`,
+          timestamp: e.submittedAt.toISOString(),
+          action: `KYC ${e.status}`,
+          actor: "user",
+          target: `${e.userName} (${e.userEmail})`,
+          details: `KYC submission status: ${e.status}`,
+          severity: e.status === "rejected" ? ("warning" as const) : ("info" as const),
+          ip: "—",
+        })),
+        ...depositEvents.map((e) => ({
+          id: `dep-${e.id}`,
+          timestamp: e.createdAt.toISOString(),
+          action: `Deposit ${e.status}`,
+          actor: "system",
+          target: `${e.userName} (${e.userEmail})`,
+          details: `Amount: ${String(e.amount)}`,
+          severity:
+            e.status === "failed" ? ("critical" as const) : e.status === "pending" ? ("warning" as const) : ("info" as const),
+          ip: "—",
+        })),
+        ...withdrawalEvents.map((e) => ({
+          id: `wd-${e.id}`,
+          timestamp: e.createdAt.toISOString(),
+          action: `Withdrawal ${e.status}`,
+          actor: "system",
+          target: `${e.userName} (${e.userEmail})`,
+          details: `Amount: ${String(e.amount)}`,
+          severity:
+            e.status === "failed" ? ("critical" as const) : e.status === "pending" || e.status === "processing" ? ("warning" as const) : ("info" as const),
+          ip: "—",
+        })),
+      ]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .filter((l) => (severity === "all" ? true : l.severity === severity))
+        .filter((l) =>
+          q
+            ? `${l.action} ${l.actor} ${l.target} ${l.details}`.toLowerCase().includes(q)
+            : true
+        );
+
+      const paged = logs.slice(offset, offset + limit);
+      const total = logs.length;
+      const criticalCount = logs.filter((l) => l.severity === "critical").length;
+      const warningCount = logs.filter((l) => l.severity === "warning").length;
+      const todayCount = logs.filter(
+        (l) => new Date(l.timestamp).toDateString() === new Date().toDateString()
+      ).length;
+
+      res.json({
+        ok: true,
+        logs: paged,
+        total,
+        limit,
+        offset,
+        stats: {
+          critical: criticalCount,
+          warning: warningCount,
+          today: todayCount,
+        },
+      });
+    } catch (err) {
+      console.error("Admin logs failed:", err);
+      res.status(500).json({ error: "Failed to load logs", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+router.delete(
+  "/asset-networks/:id",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const id = req.params.id;
+    try {
+      const [deleted] = await db
+        .delete(assetNetworks)
+        .where(eq(assetNetworks.id, id))
+        .returning({ id: assetNetworks.id });
+
+      if (!deleted) {
+        res.status(404).json({ error: "Asset network not found", code: "NOT_FOUND" });
+        return;
+      }
+
+      res.json({ ok: true, id: deleted.id });
+    } catch (err) {
+      console.error("Delete asset network failed:", err);
+      res.status(500).json({ error: "Failed to delete asset network", code: "SERVER_ERROR" });
     }
   }
 );
