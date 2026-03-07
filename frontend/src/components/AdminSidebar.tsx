@@ -1,7 +1,7 @@
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Users, Wallet, ToggleLeft, ScrollText,
+  LayoutDashboard, Users, Wallet, Coins, ToggleLeft, ScrollText,
   Shield, Settings, AlertTriangle, Ban
 } from "lucide-react";
 import logo from "@/assets/logo.png";
@@ -13,10 +13,11 @@ import {
 
 const mainNav = [
   { title: "Overview", url: "/admin", icon: LayoutDashboard },
-  { title: "User Management", url: "/admin/users", icon: Users },
-  { title: "Wallet Management", url: "/admin/wallets", icon: Wallet },
-  { title: "Feature Toggles", url: "/admin/features", icon: ToggleLeft },
-  { title: "Audit Logs", url: "/admin/logs", icon: ScrollText },
+  { title: "Users", url: "/admin/users", icon: Users },
+  { title: "Wallets", url: "/admin/wallets", icon: Wallet },
+  { title: "Assets & Networks", url: "/admin/assets", icon: Coins },
+  { title: "Features", url: "/admin/features", icon: ToggleLeft },
+  { title: "Logs", url: "/admin/logs", icon: ScrollText },
 ];
 
 const secondaryNav = [

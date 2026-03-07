@@ -17,8 +17,8 @@ export default function AdminSettings() {
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Settings className="h-6 w-6" /> Platform Settings
+        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+          <Settings className="h-6 w-6 shrink-0" /> Platform Settings
         </h1>
         <p className="text-sm text-muted-foreground">Configure global platform parameters</p>
       </div>

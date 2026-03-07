@@ -1,33 +1,76 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Ban, ShieldCheck, AlertTriangle } from "lucide-react";
-import { mockUsers } from "@/lib/admin-mock-data";
+import { Search, Ban, ShieldCheck, AlertTriangle, Loader2 } from "lucide-react";
+import { api, type AdminUserRow } from "@/lib/api";
 
 export default function AdminBlacklist() {
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const blacklisted = users.filter(u => u.status === "blacklisted" && (
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  ));
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api
+      .adminUsers({ status: "blacklisted", limit: 500 })
+      .then((res) => {
+        if (!cancelled) setUsers(res.users ?? []);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load blacklisted users");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const removeFromBlacklist = (id: string) => {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, status: "active" as const } : u));
-  };
+  const blacklisted = useMemo(
+    () =>
+      users.filter(
+        (u) =>
+          u.name.toLowerCase().includes(search.toLowerCase()) ||
+          u.email.toLowerCase().includes(search.toLowerCase())
+      ),
+    [users, search]
+  );
+
+  async function removeFromBlacklist(id: string) {
+    setUpdatingId(id);
+    setError(null);
+    try {
+      await api.adminSetUserStatus(id, "active");
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to remove from blacklist");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Ban className="h-6 w-6 text-sell" /> Blacklisted Users
+        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+          <Ban className="h-6 w-6 text-sell shrink-0" /> Blacklisted Users
         </h1>
-        <p className="text-sm text-muted-foreground">{blacklisted.length} users currently blacklisted</p>
+        <p className="text-sm text-muted-foreground">
+          {loading ? "Loading..." : `${blacklisted.length} users currently blacklisted`}
+        </p>
       </div>
+
+      {error && (
+        <Card className="border-destructive/50">
+          <CardContent className="p-3 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-4">
@@ -40,13 +83,19 @@ export default function AdminBlacklist() {
 
       <Card>
         <CardContent className="p-0">
-          {blacklisted.length === 0 ? (
+          {loading ? (
+            <div className="p-8 flex items-center justify-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading...
+            </div>
+          ) : blacklisted.length === 0 ? (
             <div className="p-8 text-center">
               <ShieldCheck className="h-8 w-8 mx-auto text-buy mb-2" />
               <p className="font-medium">No blacklisted users</p>
               <p className="text-sm text-muted-foreground">All users are in good standing</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -73,14 +122,22 @@ export default function AdminBlacklist() {
                     <TableCell className="hidden md:table-cell">{user.country}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-muted-foreground">{user.joinDate}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => removeFromBlacklist(user.id)}>
-                        <ShieldCheck className="h-3.5 w-3.5" /> Remove
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => void removeFromBlacklist(user.id)}
+                        disabled={updatingId === user.id}
+                      >
+                        {updatingId === user.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                        Remove
                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

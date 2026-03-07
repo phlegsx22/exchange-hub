@@ -1,127 +1,120 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Users, Wallet, TrendingUp, AlertTriangle, ShieldCheck, Activity,
-  ArrowUpRight, ArrowDownRight, Ban, Clock, UserCheck, Eye
-} from "lucide-react";
-import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
-import { mockUsers, mockWallets, mockAuditLogs } from "@/lib/admin-mock-data";
 import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Users, Wallet, TrendingUp, AlertTriangle, ShieldCheck, Activity, Ban, Clock, UserCheck } from "lucide-react";
+import { api } from "@/lib/api";
 
-const userGrowth = Array.from({ length: 30 }, (_, i) => ({
-  day: i + 1,
-  users: 8000 + i * 280 + Math.floor(Math.random() * 500),
-}));
-
-const volumeData = Array.from({ length: 24 }, (_, i) => ({
-  hour: `${i}:00`,
-  volume: Math.floor(Math.random() * 800 + 200),
-}));
-
-const stats = [
-  { label: "Total Users", value: mockUsers.length.toLocaleString(), change: "+12.4%", up: true, icon: Users, color: "text-foreground" },
-  { label: "Active Wallets", value: mockWallets.filter(w => w.status === "active").length.toLocaleString(), change: "+8.2%", up: true, icon: Wallet, color: "text-buy" },
-  { label: "24h Volume", value: "$2.4B", change: "+3.1%", up: true, icon: TrendingUp, color: "text-foreground" },
-  { label: "Risk Alerts", value: "7", change: "+2", up: true, icon: AlertTriangle, color: "text-sell" },
-];
+type OverviewStats = {
+  totalUsers: number;
+  activeWallets: number;
+  pendingKyc: number;
+  blacklisted: number;
+  suspended: number;
+};
 
 export default function AdminOverview() {
-  const [onlineUsers, setOnlineUsers] = useState(1284);
+  const [stats, setStats] = useState<OverviewStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setInterval(() => setOnlineUsers(p => p + Math.floor((Math.random() - 0.45) * 20)), 3000);
-    return () => clearInterval(t);
+    let cancelled = false;
+    api
+      .adminOverview()
+      .then((data) => {
+        if (!cancelled) setStats(data);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load overview");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  const recentLogs = mockAuditLogs.slice(0, 8);
-  const pendingKyc = mockUsers.filter(u => u.kycStatus === "pending").length;
-  const blacklisted = mockUsers.filter(u => u.status === "blacklisted").length;
-  const suspended = mockUsers.filter(u => u.status === "suspended").length;
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">Dashboard Overview</h1>
           <p className="text-sm text-muted-foreground">Platform health and key metrics</p>
         </div>
-        <div className="flex items-center gap-3 text-sm">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-buy" />
-            </span>
-            <span className="font-mono">{onlineUsers.toLocaleString()}</span> online
-          </div>
-        </div>
       </div>
 
-      {/* Stats Grid */}
+      {error && (
+        <Card className="border-destructive/50">
+          <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((s) => (
-          <Card key={s.label}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <s.icon className={`h-4 w-4 ${s.color}`} />
-                <div className={`flex items-center gap-0.5 text-xs font-mono ${s.up ? "text-buy" : "text-sell"}`}>
-                  {s.up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                  {s.change}
-                </div>
-              </div>
-              <p className="text-2xl font-bold font-mono">{s.value}</p>
-              <p className="text-xs text-muted-foreground">{s.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <Users className="h-4 w-4 text-foreground" />
+            </div>
+            <p className="text-2xl font-bold font-mono">{loading ? "…" : (stats?.totalUsers ?? 0).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Total Users</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <Wallet className="h-4 w-4 text-buy" />
+            </div>
+            <p className="text-2xl font-bold font-mono">{loading ? "…" : (stats?.activeWallets ?? 0).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Active Wallets</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <TrendingUp className="h-4 w-4 text-foreground" />
+            </div>
+            <p className="text-2xl font-bold font-mono">—</p>
+            <p className="text-xs text-muted-foreground">24h Volume</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-2">
+              <AlertTriangle className="h-4 w-4 text-sell" />
+            </div>
+            <p className="text-2xl font-bold font-mono">{loading ? "…" : String(stats?.blacklisted ?? 0)}</p>
+            <p className="text-xs text-muted-foreground">Risk Alerts</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Charts Row */}
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">User Growth (30d)</CardTitle>
+            <CardTitle className="text-sm font-medium">User counts</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={userGrowth}>
-                  <defs>
-                    <linearGradient id="adminGrowth" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--foreground))" stopOpacity={0.15} />
-                      <stop offset="100%" stopColor="hsl(var(--foreground))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="day" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Area type="monotone" dataKey="users" stroke="hsl(var(--foreground))" fill="url(#adminGrowth)" strokeWidth={2} dot={false} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Total regular users currently in database:{" "}
+              <strong className="text-foreground">{loading ? "…" : (stats?.totalUsers ?? 0).toLocaleString()}</strong>.
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">24h Trading Volume</CardTitle>
+            <CardTitle className="text-sm font-medium">Trading Volume</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={volumeData}>
-                  <XAxis dataKey="hour" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} interval={3} />
-                  <Bar dataKey="volume" fill="hsl(var(--muted-foreground))" radius={[2, 2, 0, 0]} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid hsl(var(--border))' }} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Real 24h volume is not wired yet. This card will show live values when trade aggregation is available.
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Bottom Row */}
       <div className="grid lg:grid-cols-3 gap-4">
-        {/* Quick Status */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Platform Status</CardTitle>
@@ -129,49 +122,34 @@ export default function AdminOverview() {
           <CardContent className="space-y-3">
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2"><UserCheck className="h-4 w-4 text-muted-foreground" /> Pending KYC</div>
-              <Badge variant="secondary">{pendingKyc}</Badge>
+              <Badge variant="secondary">{loading ? "…" : stats?.pendingKyc ?? 0}</Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2"><Ban className="h-4 w-4 text-sell" /> Blacklisted</div>
-              <Badge variant="destructive">{blacklisted}</Badge>
+              <Badge variant="destructive">{loading ? "…" : stats?.blacklisted ?? 0}</Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-muted-foreground" /> Suspended</div>
-              <Badge variant="outline">{suspended}</Badge>
+              <Badge variant="outline">{loading ? "…" : stats?.suspended ?? 0}</Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-buy" /> System Health</div>
               <Badge className="bg-buy/10 text-buy border-buy/20">Healthy</Badge>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2"><Activity className="h-4 w-4 text-muted-foreground" /> API Latency</div>
-              <span className="font-mono text-xs">12ms</span>
+              <div className="flex items-center gap-2"><Activity className="h-4 w-4 text-muted-foreground" /> API</div>
+              <span className="font-mono text-xs">—</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
-              {recentLogs.map((log) => (
-                <div key={log.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs py-1.5 border-b border-border/50 last:border-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                      log.severity === "critical" ? "bg-sell" : log.severity === "warning" ? "bg-warning" : "bg-muted-foreground"
-                    }`} />
-                    <span className="font-medium truncate">{log.action}</span>
-                    <span className="text-muted-foreground truncate hidden sm:inline">→ {log.target}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-muted-foreground ml-3.5 sm:ml-0 shrink-0">
-                    <span className="hidden md:inline">{log.actor}</span>
-                    <span className="font-mono">{new Date(log.timestamp).toLocaleTimeString()}</span>
-                  </div>
-                </div>
-              ))}
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              No audit events are wired yet.
             </div>
           </CardContent>
         </Card>

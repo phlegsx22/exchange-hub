@@ -19,6 +19,7 @@ export function Navbar() {
   const auth = getStoredAuth();
   const isLoggedIn = !!auth?.accessToken;
   const isAdmin = auth?.user?.role === "admin";
+  const isLanding = location.pathname === "/";
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -46,7 +47,7 @@ export function Navbar() {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
-          {isLoggedIn ? (
+          {isLoggedIn && !isLanding ? (
             <div className="flex items-center gap-2">
               {isAdmin && (
                 <Link to="/admin">
@@ -61,7 +62,7 @@ export function Navbar() {
                 </Button>
               </Link>
             </div>
-          ) : (
+          ) : !isLoggedIn ? (
             <>
               <Link to="/login">
                 <Button variant="outline" size="sm">Log In</Button>
@@ -70,7 +71,8 @@ export function Navbar() {
                 <Button size="sm">Sign Up</Button>
               </Link>
             </>
-          )}
+          ) : null
+          }
         </div>
 
         {/* Mobile toggle */}
@@ -92,7 +94,7 @@ export function Navbar() {
               {link.label}
             </Link>
           ))}
-          {isLoggedIn ? (
+          {isLoggedIn && !isLanding ? (
             <div className="space-y-2">
               {isAdmin && (
                 <Link to="/admin" onClick={() => setMobileOpen(false)}>
@@ -103,7 +105,7 @@ export function Navbar() {
                 <Button className="w-full" size="sm">Dashboard</Button>
               </Link>
             </div>
-          ) : (
+          ) : !isLoggedIn ? (
             <div className="flex gap-2">
               <Link to="/login" className="flex-1" onClick={() => setMobileOpen(false)}>
                 <Button variant="outline" size="sm" className="w-full">Log In</Button>
@@ -112,7 +114,7 @@ export function Navbar() {
                 <Button size="sm" className="w-full">Sign Up</Button>
               </Link>
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </header>

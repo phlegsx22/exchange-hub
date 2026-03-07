@@ -41,10 +41,10 @@ export default function AdminAlerts() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <AlertTriangle className="h-6 w-6 text-warning" /> Risk Alerts
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <AlertTriangle className="h-6 w-6 text-warning shrink-0" /> Risk Alerts
           </h1>
           <p className="text-sm text-muted-foreground">{unresolvedCount} unresolved alerts</p>
         </div>

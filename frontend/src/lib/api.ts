@@ -56,6 +56,39 @@ export type RecentActivityItem = {
   createdAt: string; // ISO string
 };
 
+export type AdminAuditLog = {
+  id: string;
+  timestamp: string;
+  action: string;
+  actor: string;
+  target: string;
+  details: string;
+  severity: "info" | "warning" | "critical";
+  ip: string;
+};
+
+export type AdminUserRow = {
+  id: string;
+  name: string;
+  email: string;
+  status: "active" | "suspended" | "pending" | "blacklisted";
+  kycStatus: "verified" | "pending" | "rejected" | "not_started" | string;
+  joinDate: string;
+  lastLogin: string;
+  totalBalance: number;
+  tradeCount: number;
+  country: string;
+  riskScore: number;
+  features: {
+    trading: boolean;
+    withdrawal: boolean;
+    transfer: boolean;
+    margin: boolean;
+    futures: boolean;
+    staking: boolean;
+  };
+};
+
 export function getStoredAuth(): AuthState | null {
   try {
     const raw = localStorage.getItem(AUTH_KEY);
@@ -315,5 +348,165 @@ export const api = {
       throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ ok: true; activity: RecentActivityItem[] }>(res);
+  },
+
+  async adminOverview() {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/overview`, { headers: getAuthHeaders() });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      totalUsers: number;
+      activeWallets: number;
+      pendingKyc: number;
+      blacklisted: number;
+      suspended: number;
+    }>(res);
+  },
+
+  async adminUsers(params?: { q?: string; status?: string; limit?: number; offset?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.q) qs.set("q", params.q);
+    if (params?.status) qs.set("status", params.status);
+    if (typeof params?.limit === "number") qs.set("limit", String(params.limit));
+    if (typeof params?.offset === "number") qs.set("offset", String(params.offset));
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/users?${qs.toString()}`, { headers: getAuthHeaders() });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ ok: true; users: AdminUserRow[]; total: number; limit: number; offset: number }>(res);
+  },
+
+  async adminSetUserStatus(userId: string, status: "active" | "suspended" | "pending" | "blacklisted") {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/status`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status }),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ ok: true; user: AdminUserRow }>(res);
+  },
+
+  async adminSetUserFeatures(
+    userId: string,
+    features: Partial<{
+      trading: boolean;
+      withdrawal: boolean;
+      transfer: boolean;
+      margin: boolean;
+      futures: boolean;
+      staking: boolean;
+    }>
+  ) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/features`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ features }),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ ok: true; user: AdminUserRow }>(res);
+  },
+
+  async adminAssetNetworks() {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/asset-networks`, { headers: getAuthHeaders() });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      assetNetworks: Array<{
+        id: string;
+        assetSymbol: string;
+        assetName: string;
+        chainSlug: string;
+        chainName: string;
+        contractAddress: string | null;
+        isDepositEnabled: boolean;
+        isWithdrawEnabled: boolean;
+      }>;
+    }>(res);
+  },
+
+  async adminSeedOptions() {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/seed-options`, { headers: getAuthHeaders() });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      options: Array<{
+        assetSymbol: string;
+        assetName: string;
+        chainSlug: string;
+        chainName: string;
+        contractAddress: string | null;
+      }>;
+    }>(res);
+  },
+
+  async adminBootstrapAssetNetworks(items: Array<{ assetSymbol: string; chainSlug: string; contractAddress?: string | null }>) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/bootstrap/asset-networks`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ items }),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ ok: true; added: number; skipped: number }>(res);
+  },
+
+  async adminDeleteAssetNetwork(id: string) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/asset-networks/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ ok: true; id: string }>(res);
+  },
+
+  async adminLogs(params?: { q?: string; severity?: "all" | "info" | "warning" | "critical"; limit?: number; offset?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.q) qs.set("q", params.q);
+    if (params?.severity) qs.set("severity", params.severity);
+    if (typeof params?.limit === "number") qs.set("limit", String(params.limit));
+    if (typeof params?.offset === "number") qs.set("offset", String(params.offset));
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/logs?${qs.toString()}`, { headers: getAuthHeaders() });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      logs: AdminAuditLog[];
+      total: number;
+      limit: number;
+      offset: number;
+      stats: { critical: number; warning: number; today: number };
+    }>(res);
   },
 };

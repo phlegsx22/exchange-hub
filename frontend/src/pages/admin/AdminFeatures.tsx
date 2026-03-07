@@ -1,16 +1,14 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ToggleLeft, Globe, User, Search, ShieldAlert,
-  Zap, ArrowLeftRight, TrendingUp, Landmark, Gift, Lock
+  Globe, User, Search, ShieldAlert,
+  Zap, ArrowLeftRight, TrendingUp, Landmark, Gift, Lock, Loader2
 } from "lucide-react";
-import { mockUsers } from "@/lib/admin-mock-data";
+import { api, type AdminUserRow } from "@/lib/api";
 
 interface GlobalFeature {
   id: string;
@@ -34,38 +32,86 @@ const initialGlobals: GlobalFeature[] = [
 
 export default function AdminFeatures() {
   const [globals, setGlobals] = useState(initialGlobals);
-  const [search, setSearch] = useState("");
   const [userSearch, setUserSearch] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [userFeatures, setUserFeatures] = useState<Record<string, Record<string, boolean>>>({});
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [updatingFeature, setUpdatingFeature] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUsersLoading(true);
+    api
+      .adminUsers({ limit: 500 })
+      .then((res) => {
+        if (!cancelled) setUsers(res.users ?? []);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load users");
+      })
+      .finally(() => {
+        if (!cancelled) setUsersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleGlobal = (id: string) => {
     setGlobals(prev => prev.map(f => f.id === id ? { ...f, enabled: !f.enabled } : f));
   };
 
-  const selectedUser = mockUsers.find(u => u.id === selectedUserId);
-  const userOverrides = selectedUserId ? userFeatures[selectedUserId] || {} : {};
+  const selectedUser = users.find(u => u.id === selectedUserId) ?? null;
 
-  const setUserOverride = (featureId: string, value: boolean) => {
-    setUserFeatures(prev => ({
-      ...prev,
-      [selectedUserId]: { ...prev[selectedUserId], [featureId]: value },
-    }));
-  };
-
-  const filteredUsers = mockUsers.filter(u =>
+  const filteredUsers = users.filter(u =>
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.email.toLowerCase().includes(userSearch.toLowerCase())
   );
 
   const categories = ["trading", "security", "platform"] as const;
 
+  async function toggleUserFeature(featureId: keyof AdminUserRow["features"], value: boolean) {
+    if (!selectedUser) return;
+    setUpdatingFeature(featureId);
+    setError(null);
+
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === selectedUser.id
+          ? { ...u, features: { ...u.features, [featureId]: value } }
+          : u
+      )
+    );
+
+    try {
+      await api.adminSetUserFeatures(selectedUser.id, { [featureId]: value });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update feature");
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === selectedUser.id
+            ? { ...u, features: { ...u.features, [featureId]: !value } }
+            : u
+        )
+      );
+    } finally {
+      setUpdatingFeature(null);
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Feature Toggles</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Feature Toggles</h1>
         <p className="text-sm text-muted-foreground">Control platform features globally or per-user</p>
       </div>
+
+      {error && (
+        <Card className="border-destructive/50">
+          <CardContent className="p-3 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
 
       {/* Global Features */}
       <div>
@@ -115,10 +161,12 @@ export default function AdminFeatures() {
                 <Input placeholder="Search users..." className="pl-9" value={userSearch} onChange={e => setUserSearch(e.target.value)} />
               </div>
               <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger className="w-full sm:w-52"><SelectValue placeholder="Select user..." /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-72">
+                  <SelectValue placeholder={usersLoading ? "Loading users..." : "Select user..."} />
+                </SelectTrigger>
                 <SelectContent>
                   {filteredUsers.map(u => (
-                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                    <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -131,18 +179,21 @@ export default function AdminFeatures() {
                   <Badge variant="outline" className="text-xs">{selectedUser.status}</Badge>
                 </div>
                 <div className="grid gap-2">
-                  {globals.map(feature => {
-                    const value = feature.id in userOverrides ? userOverrides[feature.id] : feature.enabled;
+                  {(Object.keys(selectedUser.features) as Array<keyof AdminUserRow["features"]>).map((featureId) => {
+                    const value = selectedUser.features[featureId];
+                    const label = featureId.charAt(0).toUpperCase() + featureId.slice(1);
+                    const busy = updatingFeature === featureId;
                     return (
-                      <div key={feature.id} className="flex items-center justify-between py-1.5">
+                      <div key={featureId} className="flex items-center justify-between py-1.5">
+                        <span className="text-sm">{label}</span>
                         <div className="flex items-center gap-2">
-                          <feature.icon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-sm">{feature.name}</span>
-                          {feature.id in userOverrides && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">override</Badge>
-                          )}
+                          {busy && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                          <Switch
+                            checked={value}
+                            disabled={busy}
+                            onCheckedChange={(v) => void toggleUserFeature(featureId, v)}
+                          />
                         </div>
-                        <Switch checked={value} onCheckedChange={(v) => setUserOverride(feature.id, v)} />
                       </div>
                     );
                   })}

@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { AdminLayout } from "@/components/AdminLayout";
 import Index from "./pages/Index";
@@ -23,6 +23,7 @@ import AdminLogin from "./pages/admin/AdminLogin";
 import AdminRegister from "./pages/admin/AdminRegister";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminWallets from "./pages/admin/AdminWallets";
+import AdminAssets from "./pages/admin/AdminAssets";
 import AdminFeatures from "./pages/admin/AdminFeatures";
 import AdminLogs from "./pages/admin/AdminLogs";
 import AdminBlacklist from "./pages/admin/AdminBlacklist";
@@ -31,6 +32,15 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import { RequireAdmin, RequireVerified } from "@/components/RouteGuards";
 
 const queryClient = new QueryClient();
+
+function PublicLayout() {
+  return (
+    <>
+      <Navbar />
+      <Outlet />
+    </>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -41,15 +51,19 @@ const App = () => (
         <Routes>
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/register" element={<AdminRegister />} />
-          {/* Admin routes - no Navbar, uses AdminLayout */}
-          <Route path="/admin" element={
-            <RequireAdmin>
-              <AdminLayout />
-            </RequireAdmin>
-          }>
+          {/* Admin routes - protected, no public Navbar */}
+          <Route
+            path="/admin"
+            element={
+              <RequireAdmin>
+                <AdminLayout />
+              </RequireAdmin>
+            }
+          >
             <Route index element={<AdminOverview />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="wallets" element={<AdminWallets />} />
+            <Route path="assets" element={<AdminAssets />} />
             <Route path="features" element={<AdminFeatures />} />
             <Route path="logs" element={<AdminLogs />} />
             <Route path="blacklist" element={<AdminBlacklist />} />
@@ -57,28 +71,86 @@ const App = () => (
             <Route path="settings" element={<AdminSettings />} />
           </Route>
 
-          {/* Public routes with Navbar */}
-          <Route path="*" element={
-            <>
-              <Navbar />
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                <Route path="/verify-email" element={<VerifyEmail />} />
-                <Route path="/kyc" element={<RequireVerified><KYC /></RequireVerified>} />
-                <Route path="/dashboard" element={<RequireVerified><Dashboard /></RequireVerified>} />
-                <Route path="/assets" element={<RequireVerified><Assets /></RequireVerified>} />
-                <Route path="/deposit" element={<RequireVerified><Deposit /></RequireVerified>} />
-                <Route path="/withdraw" element={<RequireVerified><Withdraw /></RequireVerified>} />
-                <Route path="/transfer" element={<RequireVerified><Transfer /></RequireVerified>} />
-                <Route path="/trade" element={<RequireVerified><Trade /></RequireVerified>} />
-                <Route path="/settings" element={<RequireVerified><Profile /></RequireVerified>} />
-                <Route path="/security" element={<RequireVerified><Profile /></RequireVerified>} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </>
-          } />
+          {/* Public + user routes with navbar */}
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route
+              path="/kyc"
+              element={
+                <RequireVerified>
+                  <KYC />
+                </RequireVerified>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <RequireVerified>
+                  <Dashboard />
+                </RequireVerified>
+              }
+            />
+            <Route
+              path="/assets"
+              element={
+                <RequireVerified>
+                  <Assets />
+                </RequireVerified>
+              }
+            />
+            <Route
+              path="/deposit"
+              element={
+                <RequireVerified>
+                  <Deposit />
+                </RequireVerified>
+              }
+            />
+            <Route
+              path="/withdraw"
+              element={
+                <RequireVerified>
+                  <Withdraw />
+                </RequireVerified>
+              }
+            />
+            <Route
+              path="/transfer"
+              element={
+                <RequireVerified>
+                  <Transfer />
+                </RequireVerified>
+              }
+            />
+            <Route
+              path="/trade"
+              element={
+                <RequireVerified>
+                  <Trade />
+                </RequireVerified>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <RequireVerified>
+                  <Profile />
+                </RequireVerified>
+              }
+            />
+            <Route
+              path="/security"
+              element={
+                <RequireVerified>
+                  <Profile />
+                </RequireVerified>
+              }
+            />
+            <Route path="*" element={<NotFound />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
