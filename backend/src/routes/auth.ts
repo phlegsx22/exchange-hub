@@ -9,7 +9,7 @@ import {
   verifyEmailSchema,
   resendVerificationSchema,
 } from "../schemas/auth.js";
-import { signToken } from "../middleware/auth.js";
+import { signToken, authMiddleware, type AuthRequest } from "../middleware/auth.js";
 import { sendVerificationEmail } from "../lib/email.js";
 import { z } from "zod";
 
@@ -108,7 +108,8 @@ router.post("/register", async (req: Request, res: Response) => {
 
 /**
  * POST /auth/login
- * Validate credentials, update last login, return JWT.
+ * User login endpoint - ONLY for regular users (role = "user").
+ * Admins must use /auth/admin/login.
  */
 router.post("/login", async (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
@@ -135,6 +136,15 @@ router.post("/login", async (req: Request, res: Response) => {
       .limit(1);
     if (!user) {
       res.status(401).json({ error: "Invalid email or password", code: "INVALID_CREDENTIALS" });
+      return;
+    }
+
+    // SECURITY: Block admin/support accounts from using user login endpoint
+    if (user.role !== "user") {
+      res.status(403).json({
+        error: "Please use the admin login portal",
+        code: "WRONG_LOGIN_PORTAL",
+      });
       return;
     }
 
@@ -435,6 +445,58 @@ router.post("/resend-verification", async (req: Request, res: Response) => {
     console.error("Resend verification failed:", err);
     res.status(500).json({ error: "Failed to resend verification", code: "SERVER_ERROR" });
   }
+});
+
+/**
+ * GET /auth/me
+ * Validate JWT and return fresh user data from database.
+ * This is the source of truth for user session - frontend should call this on mount.
+ */
+router.get("/me", authMiddleware, async (req: AuthRequest, res: Response) => {
+  // authMiddleware already fetched fresh user data from DB
+  if (!req.user) {
+    res.status(401).json({ error: "Unauthorized", code: "NO_TOKEN" });
+    return;
+  }
+
+  // Check if account is active
+  if (req.user.accountStatus !== "active") {
+    res.status(403).json({
+      error: "Account is not active",
+      code: "ACCOUNT_DISABLED",
+      status: req.user.accountStatus,
+    });
+    return;
+  }
+
+  // Return fresh user data (never trust client-side storage)
+  res.json({
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role,
+      emailVerified: req.user.emailVerified,
+      kycStatus: req.user.kycStatus,
+      accountStatus: req.user.accountStatus,
+      canTrade: req.user.canTrade,
+      canWithdraw: req.user.canWithdraw,
+      canTransfer: req.user.canTransfer,
+      canMargin: req.user.canMargin,
+      canFutures: req.user.canFutures,
+      canStaking: req.user.canStaking,
+    },
+  });
+});
+
+/**
+ * POST /auth/logout
+ * Invalidate session (for future: add token to blacklist).
+ * For now, just acknowledge - client should clear local storage.
+ */
+router.post("/logout", (_req: Request, res: Response) => {
+  // In a production system, you'd add the token to a blacklist here
+  // For now, we just acknowledge the logout
+  res.json({ ok: true, message: "Logged out successfully" });
 });
 
 export default router;
