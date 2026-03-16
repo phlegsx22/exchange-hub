@@ -57,16 +57,25 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "exchange-hub-api" });
 });
 
-const stopPriceFeed = startPriceFeed();
-const stopDepositPoller = startDepositPoller();
+let stopPriceFeed: (() => void) | null = null;
+let stopDepositPoller: (() => void) | null = null;
 
 function shutdown(): void {
-  stopDepositPoller();
-  stopPriceFeed();
+  stopDepositPoller?.();
+  stopPriceFeed?.();
 }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  // Start background services asynchronously after HTTP server is up.
+  setTimeout(() => {
+    try {
+      stopPriceFeed = startPriceFeed();
+      stopDepositPoller = startDepositPoller();
+    } catch (err) {
+      console.error("Background service bootstrap failed:", err);
+    }
+  }, 0);
 });

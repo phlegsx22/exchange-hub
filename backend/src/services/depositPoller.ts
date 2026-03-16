@@ -276,8 +276,6 @@ export function startDepositPoller(): () => void {
   timer = setInterval(() => {
     void pollOnce();
   }, interval);
-  // warm start
-  void pollOnce();
   console.log(`[deposit-poller] started (interval=${interval}ms)`);
   return () => {
     if (timer) clearInterval(timer);

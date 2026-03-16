@@ -10,8 +10,26 @@ const prices = new Map<string, PriceRow>();
 let ws: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
 
-const BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/!miniTicker@arr";
-const RECONNECT_MS = 5000;
+const DEFAULT_FEED_SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ARBUSDT", "USDTUSDT", "USDCUSDT"];
+const FEED_SYMBOLS = (process.env.PRICE_FEED_SYMBOLS ?? DEFAULT_FEED_SYMBOLS.join(","))
+  .split(",")
+  .map((s) => s.trim().toUpperCase())
+  .filter((s) => /^[A-Z0-9]{5,20}$/.test(s));
+const FEED_STREAMS = FEED_SYMBOLS.map((s) => `${s.toLowerCase()}@miniTicker`).join("/");
+const BINANCE_WS_URL = `wss://stream.binance.com:9443/stream?streams=${FEED_STREAMS}`;
+const RECONNECT_MS = Number(process.env.PRICE_FEED_RECONNECT_MS ?? 5000);
+
+type StreamTicker = { s?: string; c?: string };
+type StreamEnvelope = { stream?: string; data?: StreamTicker };
+
+function handleTickerEvent(event: StreamTicker): void {
+  if (!event?.s || !event?.c) return;
+  if (!event.s.endsWith("USDT")) return;
+  const symbol = event.s.slice(0, -4);
+  const p = Number(event.c);
+  if (!Number.isFinite(p) || p <= 0) return;
+  prices.set(symbol, { priceUsd: p, updatedAt: Date.now() });
+}
 
 function setStableFallbacks(now: number): void {
   // For portfolio valuation fallback when stream is temporarily unavailable.
@@ -25,23 +43,25 @@ function connect(): void {
 
   ws.on("open", () => {
     setStableFallbacks(Date.now());
-    console.log("[price-feed] Binance miniTicker connected");
+    console.log(`[price-feed] Binance stream connected (${FEED_SYMBOLS.length} symbols)`);
   });
 
   ws.on("message", (raw: RawData) => {
     try {
-      const payload = JSON.parse(String(raw)) as Array<{ s: string; c: string }>;
-      if (!Array.isArray(payload)) return;
-      const now = Date.now();
-      setStableFallbacks(now);
-      for (const row of payload) {
-        if (!row?.s || !row?.c) continue;
-        if (!row.s.endsWith("USDT")) continue;
-        const symbol = row.s.slice(0, -4);
-        const p = Number(row.c);
-        if (!Number.isFinite(p) || p <= 0) continue;
-        prices.set(symbol, { priceUsd: p, updatedAt: now });
+      const payload = JSON.parse(String(raw)) as StreamEnvelope | StreamTicker | Array<StreamTicker>;
+      setStableFallbacks(Date.now());
+
+      if (Array.isArray(payload)) {
+        for (const row of payload) handleTickerEvent(row);
+        return;
       }
+
+      if ("data" in payload && typeof payload === "object" && payload !== null && payload.data) {
+        handleTickerEvent(payload.data);
+        return;
+      }
+
+      handleTickerEvent(payload as StreamTicker);
     } catch {
       // ignore malformed frames
     }
@@ -55,12 +75,13 @@ function connect(): void {
     console.warn("[price-feed] disconnected, reconnecting...");
     ws = null;
     if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connect, RECONNECT_MS);
+    reconnectTimer = setTimeout(connect, Number.isFinite(RECONNECT_MS) && RECONNECT_MS > 0 ? RECONNECT_MS : 5000);
   });
 }
 
 export function startPriceFeed(): () => void {
-  connect();
+  // Defer websocket bootstrap so API startup path stays fast/non-blocking.
+  setTimeout(connect, 0);
   return () => {
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = null;
