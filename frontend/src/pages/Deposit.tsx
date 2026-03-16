@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { api, type SupportedAssetNetwork } from "@/lib/api";
-import { Copy, Info } from "lucide-react";
+import { api, type SupportedAssetNetwork, type UserDepositAddress } from "@/lib/api";
+import { Copy } from "lucide-react";
 
 export default function Deposit() {
   const [loading, setLoading] = useState(true);
@@ -13,21 +13,17 @@ export default function Deposit() {
 
   const [asset, setAsset] = useState<string>("");
   const [assetNetworkId, setAssetNetworkId] = useState<string>("");
-
-  const [address, setAddress] = useState<string>("");
-  const [memo, setMemo] = useState<string | null>(null);
-  const [isPlaceholder, setIsPlaceholder] = useState(false);
-  const [fetchingAddress, setFetchingAddress] = useState(false);
+  const [addresses, setAddresses] = useState<UserDepositAddress[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    api
-      .supportedNetworks()
-      .then((r) => {
+    Promise.all([api.supportedNetworks(), api.userDepositAddresses()])
+      .then(([r, d]) => {
         if (cancelled) return;
         setNetworks(r.assetNetworks ?? []);
+        setAddresses(d.addresses ?? []);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -62,34 +58,16 @@ export default function Deposit() {
     // pick first network when asset changes
     const first = assetNetworks[0];
     setAssetNetworkId(first?.id ?? "");
-    setAddress("");
-    setMemo(null);
-    setIsPlaceholder(false);
   }, [asset, assetNetworks]);
 
-  async function getAddress(): Promise<void> {
-    if (!assetNetworkId) return;
-    setFetchingAddress(true);
-    setError(null);
-    try {
-      const r = await api.depositAddress(assetNetworkId);
-      setAddress(r.address);
-      setMemo(r.memo);
-      setIsPlaceholder(!!r.isPlaceholder);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to get address");
-    } finally {
-      setFetchingAddress(false);
-    }
-  }
-
   const selected = assetNetworks.find((n) => n.id === assetNetworkId) ?? null;
+  const selectedAddress = addresses.find((a) => a.assetNetworkId === assetNetworkId) ?? null;
 
   return (
     <div className="container py-8 space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Deposit</h1>
-        <p className="text-sm text-muted-foreground">Select an asset and network to get a deposit address.</p>
+        <p className="text-sm text-muted-foreground">Select an asset and network to view your assigned deposit address.</p>
       </div>
 
       {error && (
@@ -139,37 +117,26 @@ export default function Deposit() {
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={getAddress} disabled={!assetNetworkId || fetchingAddress || loading}>
-              {fetchingAddress ? "Generating…" : "Get deposit address"}
-            </Button>
-          </div>
-
-          {address && (
+          {selectedAddress ? (
             <div className="space-y-2">
               <p className="text-sm font-medium">Address</p>
               <div className="flex gap-2">
-                <Input readOnly value={address} className="font-mono" />
+                <Input readOnly value={selectedAddress.address} className="font-mono" />
                 <Button
                   variant="outline"
                   onClick={async () => {
-                    await navigator.clipboard.writeText(address);
+                    await navigator.clipboard.writeText(selectedAddress.address);
                   }}
                   title="Copy"
                 >
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
-              {memo && <p className="text-xs text-muted-foreground">Memo: {memo}</p>}
-              {isPlaceholder && (
-                <div className="flex items-start gap-2 rounded-md border p-3 text-xs text-muted-foreground">
-                  <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                  <p>
-                    This is a placeholder address until we plug in a real wallet/address provider and chain indexer.
-                    Deposits won’t credit balances yet.
-                  </p>
-                </div>
-              )}
+              {selectedAddress.memo && <p className="text-xs text-muted-foreground">Memo: {selectedAddress.memo}</p>}
+            </div>
+          ) : (
+            <div className="rounded-md border p-3 text-xs text-muted-foreground">
+              Deposit address has not been assigned for this network yet. Please contact support/admin.
             </div>
           )}
         </CardContent>

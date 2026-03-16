@@ -45,6 +45,7 @@ export default function AdminKyc() {
   const [seedOpen, setSeedOpen] = useState(false);
   const [assetNetworks, setAssetNetworks] = useState<AssetNetwork[]>([]);
   const [selectedNetworks, setSelectedNetworks] = useState<Set<string>>(new Set());
+  const [seedAddressInputs, setSeedAddressInputs] = useState<Record<string, { address: string; memo: string }>>({});
   const [loadingNetworks, setLoadingNetworks] = useState(false);
   const [seeding, setSeeding] = useState(false);
 
@@ -135,10 +136,25 @@ export default function AdminKyc() {
     setSeedOpen(true);
     setLoadingNetworks(true);
     setSelectedNetworks(new Set());
+    setSeedAddressInputs({});
     try {
-      const res = await api.adminAssetNetworks();
+      const [res, existing] = await Promise.all([
+        api.adminAssetNetworks(),
+        api.adminUserDepositAddresses(selected.userId),
+      ]);
       const enabled = (res.assetNetworks ?? []).filter((n) => n.isDepositEnabled);
       setAssetNetworks(enabled);
+      const byId = new Map(
+        (existing.addresses ?? []).map((a) => [
+          a.assetNetworkId,
+          { address: a.address ?? "", memo: a.memo ?? "" },
+        ])
+      );
+      const nextInputs: Record<string, { address: string; memo: string }> = {};
+      for (const n of enabled) {
+        nextInputs[n.id] = byId.get(n.id) ?? { address: "", memo: "" };
+      }
+      setSeedAddressInputs(nextInputs);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load networks");
       setSeedOpen(false);
@@ -161,9 +177,24 @@ export default function AdminKyc() {
     setSeeding(true);
     setError(null);
     try {
+      const entries = Array.from(selectedNetworks)
+        .map((id) => {
+          const input = seedAddressInputs[id];
+          return {
+            assetNetworkId: id,
+            address: input?.address?.trim() ?? "",
+            memo: input?.memo?.trim() || null,
+          };
+        })
+        .filter((e) => e.address.length > 0);
+
+      if (entries.length === 0) {
+        throw new Error("Enter at least one address before saving.");
+      }
+
       await api.adminSeedUserDepositAddresses(
         selected.userId,
-        selectedNetworks.size > 0 ? Array.from(selectedNetworks) : undefined
+        entries
       );
       setSeedOpen(false);
     } catch (e: unknown) {
@@ -357,7 +388,7 @@ export default function AdminKyc() {
           <DialogHeader>
             <DialogTitle>Seed deposit addresses</DialogTitle>
             <DialogDescription>
-              {selected ? `Create deposit addresses for ${selected.userName}.` : "Select networks."}
+              {selected ? `Enter manual deposit addresses for ${selected.userName}.` : "Select networks."}
             </DialogDescription>
           </DialogHeader>
 
@@ -366,13 +397,46 @@ export default function AdminKyc() {
               <Loader2 className="h-4 w-4 animate-spin" /> Loading networks...
             </div>
           ) : (
-            <div className="space-y-2 max-h-[360px] overflow-y-auto border rounded-md p-2">
+            <div className="space-y-2 max-h-[420px] overflow-y-auto border rounded-md p-2">
               {assetNetworks.map((n) => (
-                <label key={n.id} className="flex items-center gap-3 px-2 py-2 rounded hover:bg-muted/50 cursor-pointer">
-                  <Checkbox checked={selectedNetworks.has(n.id)} onCheckedChange={() => toggleNetwork(n.id)} />
-                  <span className="font-medium">{n.assetSymbol}</span>
-                  <span className="text-muted-foreground text-sm">{n.chainName}</span>
-                </label>
+                <div key={n.id} className="px-2 py-2 rounded hover:bg-muted/50">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <Checkbox checked={selectedNetworks.has(n.id)} onCheckedChange={() => toggleNetwork(n.id)} />
+                    <span className="font-medium">{n.assetSymbol}</span>
+                    <span className="text-muted-foreground text-sm">{n.chainName}</span>
+                  </label>
+                  {selectedNetworks.has(n.id) && (
+                    <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                      <Input
+                        className="sm:col-span-3"
+                        placeholder="Paste deposit address"
+                        value={seedAddressInputs[n.id]?.address ?? ""}
+                        onChange={(e) =>
+                          setSeedAddressInputs((prev) => ({
+                            ...prev,
+                            [n.id]: {
+                              address: e.target.value,
+                              memo: prev[n.id]?.memo ?? "",
+                            },
+                          }))
+                        }
+                      />
+                      <Input
+                        placeholder="Memo (optional)"
+                        value={seedAddressInputs[n.id]?.memo ?? ""}
+                        onChange={(e) =>
+                          setSeedAddressInputs((prev) => ({
+                            ...prev,
+                            [n.id]: {
+                              address: prev[n.id]?.address ?? "",
+                              memo: e.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -381,7 +445,7 @@ export default function AdminKyc() {
             <Button variant="outline" onClick={() => setSeedOpen(false)}>Cancel</Button>
             <Button onClick={seedAddresses} disabled={seeding || loadingNetworks} className="gap-1.5">
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              Seed {selectedNetworks.size > 0 ? `selected (${selectedNetworks.size})` : "all enabled"}
+              Save addresses
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -44,6 +44,16 @@ export type SupportedAssetNetwork = {
   isWithdrawEnabled: boolean;
 };
 
+export type UserDepositAddress = {
+  assetNetworkId: string;
+  assetSymbol: string;
+  chainSlug: string;
+  chainName: string;
+  contractAddress: string | null;
+  address: string;
+  memo: string | null;
+};
+
 export type RecentActivityItem = {
   id: string;
   type: "deposit" | "withdrawal" | "trade" | "transfer" | "fee" | "adjustment";
@@ -367,6 +377,19 @@ export const api = {
     return handleResponse<{ ok: true; address: string; memo: string | null; isPlaceholder: boolean }>(res);
   },
 
+  async userDepositAddresses() {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/wallets/deposit-addresses`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ ok: true; addresses: UserDepositAddress[] }>(res);
+  },
+
   async withdrawRequest(body: { assetNetworkId: string; toAddress: string; amount: string | number }) {
     let res: Response;
     try {
@@ -565,13 +588,16 @@ export const api = {
     }>(res);
   },
 
-  async adminSeedUserDepositAddresses(userId: string, assetNetworkIds?: string[]) {
+  async adminSeedUserDepositAddresses(
+    userId: string,
+    entries: Array<{ assetNetworkId: string; address: string; memo?: string | null }>
+  ) {
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/seed-deposit-addresses`, {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ assetNetworkIds }),
+        body: JSON.stringify({ entries }),
       });
     } catch {
       throw new Error(NETWORK_ERROR_MESSAGE);
@@ -582,7 +608,30 @@ export const api = {
       userName: string;
       createdWallets: number;
       createdAddresses: number;
+      updatedAddresses: number;
       skipped: number;
+    }>(res);
+  },
+
+  async adminUserDepositAddresses(userId: string) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/deposit-addresses`, {
+        headers: getAuthHeaders(),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      addresses: Array<{
+        assetNetworkId: string;
+        assetSymbol: string;
+        chainSlug: string;
+        chainName: string;
+        address: string | null;
+        memo: string | null;
+      }>;
     }>(res);
   },
 

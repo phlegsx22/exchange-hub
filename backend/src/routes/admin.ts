@@ -26,7 +26,15 @@ const kycReviewSchema = z.object({
 });
 
 const seedUserAddressesSchema = z.object({
-  assetNetworkIds: z.array(z.string().uuid()).optional(),
+  entries: z
+    .array(
+      z.object({
+        assetNetworkId: z.string().uuid(),
+        address: z.string().trim().min(3).max(128),
+        memo: z.string().trim().max(64).optional().nullable(),
+      })
+    )
+    .min(1),
 });
 
 type SeedChain = {
@@ -978,8 +986,16 @@ router.post(
         return;
       }
 
-      const selectedIds = parsed.data.assetNetworkIds ?? [];
-      const selectedSet = new Set(selectedIds);
+      const inputEntries = parsed.data.entries;
+      const deduped = new Map<string, { assetNetworkId: string; address: string; memo: string | null }>();
+      for (const entry of inputEntries) {
+        deduped.set(entry.assetNetworkId, {
+          assetNetworkId: entry.assetNetworkId,
+          address: entry.address.trim(),
+          memo: entry.memo?.trim() || null,
+        });
+      }
+      const selectedSet = new Set(Array.from(deduped.keys()));
       const options = await db
         .select({
           id: assetNetworks.id,
@@ -991,11 +1007,7 @@ router.post(
         .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
         .innerJoin(chains, eq(assetNetworks.chainId, chains.id));
 
-      const targets = options.filter(
-        (o) =>
-          o.isDepositEnabled &&
-          (selectedSet.size === 0 || selectedSet.has(o.id))
-      );
+      const targets = options.filter((o) => o.isDepositEnabled && selectedSet.has(o.id));
       if (targets.length === 0) {
         res.status(400).json({ error: "No eligible asset networks selected", code: "VALIDATION_FAILED" });
         return;
@@ -1003,9 +1015,15 @@ router.post(
 
       let createdWallets = 0;
       let createdAddresses = 0;
+      let updatedAddresses = 0;
       let skipped = 0;
 
       for (const t of targets) {
+        const input = deduped.get(t.id);
+        if (!input) {
+          skipped += 1;
+          continue;
+        }
         const [existingWallet] = await db
           .select({ id: walletAccounts.id })
           .from(walletAccounts)
@@ -1026,17 +1044,20 @@ router.post(
           .where(and(eq(depositAddresses.userId, userId), eq(depositAddresses.assetNetworkId, t.id)))
           .limit(1);
         if (existingAddress) {
-          skipped += 1;
-          continue;
+          await db
+            .update(depositAddresses)
+            .set({ address: input.address, memo: input.memo })
+            .where(eq(depositAddresses.id, existingAddress.id));
+          updatedAddresses += 1;
+        } else {
+          await db.insert(depositAddresses).values({
+            userId,
+            assetNetworkId: t.id,
+            address: input.address,
+            memo: input.memo,
+          });
+          createdAddresses += 1;
         }
-
-        const address = `seed:${t.chainSlug}:${t.coin}:${userId}:${t.id}`;
-        await db.insert(depositAddresses).values({
-          userId,
-          assetNetworkId: t.id,
-          address,
-        });
-        createdAddresses += 1;
       }
 
       res.status(201).json({
@@ -1045,11 +1066,75 @@ router.post(
         userName: user.name,
         createdWallets,
         createdAddresses,
+        updatedAddresses,
         skipped,
       });
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("deposit_address_unique") || msg.includes("duplicate key")) {
+        res.status(409).json({
+          error: "Address is already assigned to another user/network. Use unique addresses only.",
+          code: "ADDRESS_ALREADY_IN_USE",
+        });
+        return;
+      }
       console.error("Seed deposit addresses failed:", err);
       res.status(500).json({ error: "Failed to seed deposit addresses", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+router.get(
+  "/users/:id/deposit-addresses",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.params.id;
+    try {
+      const [user] = await db
+        .select({ id: users.id, role: users.role })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!user || user.role !== "user") {
+        res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
+        return;
+      }
+
+      const rows = await db
+        .select({
+          assetNetworkId: assetNetworks.id,
+          assetSymbol: assets.symbol,
+          chainSlug: chains.slug,
+          chainName: chains.name,
+          address: depositAddresses.address,
+          memo: depositAddresses.memo,
+          isDepositEnabled: assetNetworks.isDepositEnabled,
+        })
+        .from(assetNetworks)
+        .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
+        .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
+        .leftJoin(
+          depositAddresses,
+          and(eq(depositAddresses.userId, userId), eq(depositAddresses.assetNetworkId, assetNetworks.id))
+        )
+        .where(eq(assetNetworks.isDepositEnabled, true))
+        .orderBy(assets.symbol, chains.name);
+
+      res.json({
+        ok: true,
+        addresses: rows.map((r) => ({
+          assetNetworkId: r.assetNetworkId,
+          assetSymbol: r.assetSymbol,
+          chainSlug: r.chainSlug,
+          chainName: r.chainName,
+          address: r.address ?? null,
+          memo: r.memo ?? null,
+        })),
+      });
+    } catch (err) {
+      console.error("Admin user deposit addresses failed:", err);
+      res.status(500).json({ error: "Failed to load user deposit addresses", code: "SERVER_ERROR" });
     }
   }
 );
@@ -1276,14 +1361,6 @@ router.post(
         .limit(1)
         .then((r) => r[0]);
 
-      // Deterministic unique placeholder address (user+network scoped, globally unique string).
-      const addr = `pending:${metaRow?.chainSlug ?? "chain"}:${metaRow?.coin ?? "asset"}:${userId}:${selectedAssetNetworkId}`;
-      await db.insert(depositAddresses).values({
-        userId,
-        assetNetworkId: selectedAssetNetworkId,
-        address: addr,
-      });
-
       res.status(201).json({
         ok: true,
         wallet: {
@@ -1294,7 +1371,7 @@ router.post(
           network: metaRow?.chainName ?? "—",
           balance: 0,
           frozen: 0,
-          address: addr,
+          address: "—",
           status: wallet.status,
           createdAt: wallet.createdAt.toISOString().slice(0, 10),
         },

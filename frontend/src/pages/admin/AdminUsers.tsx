@@ -71,6 +71,11 @@ export default function AdminUsers() {
   const [rejectKycUser, setRejectKycUser] = useState<AdminUser | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [seedPromptUser, setSeedPromptUser] = useState<AdminUser | null>(null);
+  const [seedManualUser, setSeedManualUser] = useState<AdminUser | null>(null);
+  const [seedAssetNetworks, setSeedAssetNetworks] = useState<Array<{ id: string; assetSymbol: string; chainName: string }>>([]);
+  const [seedSelectedNetworks, setSeedSelectedNetworks] = useState<Set<string>>(new Set());
+  const [seedAddressInputs, setSeedAddressInputs] = useState<Record<string, { address: string; memo: string }>>({});
+  const [loadingSeedNetworks, setLoadingSeedNetworks] = useState(false);
   const [deleteUserTarget, setDeleteUserTarget] = useState<AdminUser | null>(null);
 
   const totalUsers = users.length;
@@ -156,14 +161,63 @@ export default function AdminUsers() {
     }
   }
 
-  async function seedAddressesForUser(user: AdminUser) {
-    setSeedingUserId(user.id);
+  async function openManualSeedDialog(user: AdminUser) {
+    setSeedManualUser(user);
+    setLoadingSeedNetworks(true);
     setError(null);
     try {
-      await api.adminSeedUserDepositAddresses(user.id);
+      const [networks, existing] = await Promise.all([
+        api.adminAssetNetworks(),
+        api.adminUserDepositAddresses(user.id),
+      ]);
+      const enabled = (networks.assetNetworks ?? [])
+        .filter((n) => n.isDepositEnabled)
+        .map((n) => ({ id: n.id, assetSymbol: n.assetSymbol, chainName: n.chainName }));
+      setSeedAssetNetworks(enabled);
+      const byId = new Map(
+        (existing.addresses ?? []).map((a) => [
+          a.assetNetworkId,
+          { address: a.address ?? "", memo: a.memo ?? "" },
+        ])
+      );
+      const inputs: Record<string, { address: string; memo: string }> = {};
+      for (const n of enabled) inputs[n.id] = byId.get(n.id) ?? { address: "", memo: "" };
+      setSeedAddressInputs(inputs);
+      setSeedSelectedNetworks(new Set());
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load seed networks");
+      setSeedManualUser(null);
+    } finally {
+      setLoadingSeedNetworks(false);
+    }
+  }
+
+  async function saveManualSeedAddresses() {
+    if (!seedManualUser) return;
+    const entries = Array.from(seedSelectedNetworks)
+      .map((id) => {
+        const input = seedAddressInputs[id];
+        return {
+          assetNetworkId: id,
+          address: input?.address?.trim() ?? "",
+          memo: input?.memo?.trim() || null,
+        };
+      })
+      .filter((e) => e.address.length > 0);
+
+    if (entries.length === 0) {
+      setError("Select at least one network and enter its address.");
+      return;
+    }
+
+    setSeedingUserId(seedManualUser.id);
+    setError(null);
+    try {
+      await api.adminSeedUserDepositAddresses(seedManualUser.id, entries);
+      setSeedManualUser(null);
       await loadUsers();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to seed addresses");
+      setError(err instanceof Error ? err.message : "Failed to save deposit addresses");
     } finally {
       setSeedingUserId(null);
     }
@@ -360,7 +414,7 @@ export default function AdminUsers() {
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              void seedAddressesForUser(user);
+                              void openManualSeedDialog(user);
                             }}
                             disabled={processingKycUserId === user.id || seedingUserId === user.id}
                           >
@@ -473,7 +527,7 @@ export default function AdminUsers() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    void seedAddressesForUser(selectedUser);
+                    void openManualSeedDialog(selectedUser);
                   }}
                   disabled={processingKycUserId === selectedUser.id || seedingUserId === selectedUser.id}
                 >
@@ -562,12 +616,98 @@ export default function AdminUsers() {
             <Button
               onClick={() => {
                 if (!seedPromptUser) return;
-                void seedAddressesForUser(seedPromptUser);
+                void openManualSeedDialog(seedPromptUser);
                 setSeedPromptUser(null);
               }}
               disabled={seedPromptUser != null && seedingUserId === seedPromptUser.id}
             >
               Seed now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual seed address dialog */}
+      <Dialog open={!!seedManualUser} onOpenChange={(open) => !open && setSeedManualUser(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Assign Deposit Addresses</DialogTitle>
+            <DialogDescription>
+              {seedManualUser
+                ? `Enter addresses for ${seedManualUser.name}. Selected networks will be saved/updated.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingSeedNetworks ? (
+            <div className="p-4 text-sm text-muted-foreground">Loading networks...</div>
+          ) : (
+            <div className="max-h-[420px] overflow-y-auto space-y-2 border rounded-md p-2">
+              {seedAssetNetworks.map((n) => (
+                <div key={n.id} className="px-2 py-2 rounded hover:bg-muted/50">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={seedSelectedNetworks.has(n.id)}
+                      onChange={(e) =>
+                        setSeedSelectedNetworks((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(n.id);
+                          else next.delete(n.id);
+                          return next;
+                        })
+                      }
+                    />
+                    <span className="font-medium">{n.assetSymbol}</span>
+                    <span className="text-sm text-muted-foreground">{n.chainName}</span>
+                  </label>
+                  {seedSelectedNetworks.has(n.id) && (
+                    <div className="mt-2 grid gap-2 sm:grid-cols-4">
+                      <Input
+                        className="sm:col-span-3"
+                        placeholder="Paste deposit address"
+                        value={seedAddressInputs[n.id]?.address ?? ""}
+                        onChange={(e) =>
+                          setSeedAddressInputs((prev) => ({
+                            ...prev,
+                            [n.id]: {
+                              address: e.target.value,
+                              memo: prev[n.id]?.memo ?? "",
+                            },
+                          }))
+                        }
+                      />
+                      <Input
+                        placeholder="Memo (optional)"
+                        value={seedAddressInputs[n.id]?.memo ?? ""}
+                        onChange={(e) =>
+                          setSeedAddressInputs((prev) => ({
+                            ...prev,
+                            [n.id]: {
+                              address: prev[n.id]?.address ?? "",
+                              memo: e.target.value,
+                            },
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSeedManualUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                void saveManualSeedAddresses();
+              }}
+              disabled={seedManualUser != null && seedingUserId === seedManualUser.id}
+            >
+              Save addresses
             </Button>
           </DialogFooter>
         </DialogContent>

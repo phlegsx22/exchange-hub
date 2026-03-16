@@ -37,6 +37,59 @@ router.get("/supported", authMiddleware, requireVerified, requireAccountActive, 
   }
 });
 
+router.get(
+  "/deposit-addresses",
+  authMiddleware,
+  requireVerified,
+  requireAccountActive,
+  requireKycApproved,
+  async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized", code: "NO_TOKEN" });
+      return;
+    }
+    try {
+      const rows = await db
+        .select({
+          assetNetworkId: assetNetworks.id,
+          assetSymbol: assets.symbol,
+          chainSlug: chains.slug,
+          chainName: chains.name,
+          contractAddress: assetNetworks.contractAddress,
+          isDepositEnabled: assetNetworks.isDepositEnabled,
+          address: depositAddresses.address,
+          memo: depositAddresses.memo,
+        })
+        .from(assetNetworks)
+        .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
+        .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
+        .leftJoin(
+          depositAddresses,
+          and(eq(depositAddresses.userId, req.user.id), eq(depositAddresses.assetNetworkId, assetNetworks.id))
+        )
+        .where(eq(assetNetworks.isDepositEnabled, true));
+
+      res.json({
+        ok: true,
+        addresses: rows
+          .filter((r) => !!r.address)
+          .map((r) => ({
+            assetNetworkId: r.assetNetworkId,
+            assetSymbol: r.assetSymbol,
+            chainSlug: r.chainSlug,
+            chainName: r.chainName,
+            contractAddress: r.contractAddress,
+            address: r.address!,
+            memo: r.memo ?? null,
+          })),
+      });
+    } catch (err) {
+      console.error("Deposit addresses failed:", err);
+      res.status(500).json({ error: "Failed to load deposit addresses", code: "SERVER_ERROR" });
+    }
+  }
+);
+
 router.post(
   "/deposit-address",
   authMiddleware,
@@ -85,31 +138,25 @@ router.post(
       .then((r) => r[0]);
 
     if (existing) {
-      res.json({ ok: true, address: existing.address, memo: existing.memo ?? null, isPlaceholder: existing.address.startsWith("pending:") });
+      res.json({ ok: true, address: existing.address, memo: existing.memo ?? null, isPlaceholder: false });
       return;
     }
 
-    // Deterministic unique placeholder address per user+network (no two users share).
-    const addr = `pending:${an.chainSlug}:${an.assetSymbol}:${req.user.id}:${assetNetworkId}`;
-    await db.insert(depositAddresses).values({
-      userId: req.user.id,
-      assetNetworkId,
-      address: addr,
-    });
-
     await sendAdminNotificationEmail({
-      subject: "Deposit address generated",
-      title: "User requested a deposit address",
+      subject: "Deposit address missing for user",
+      title: "User attempted deposit without assigned address",
       lines: [
         `User ID: ${req.user.id}`,
         `Email: ${req.user.email}`,
         `Asset: ${an.assetSymbol}`,
         `Network: ${an.chainSlug}`,
-        `Address: ${addr}`,
       ],
     });
 
-    res.status(201).json({ ok: true, address: addr, memo: null, isPlaceholder: true });
+    res.status(404).json({
+      error: "Deposit address not assigned yet. Please contact support.",
+      code: "ADDRESS_NOT_SEEDED",
+    });
   } catch (err) {
     console.error("Deposit address failed:", err);
     res.status(500).json({ error: "Failed to create deposit address", code: "SERVER_ERROR" });

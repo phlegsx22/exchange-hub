@@ -25,6 +25,8 @@ type AddressRow = {
 const ERC20_ABI = ["function balanceOf(address owner) view returns (uint256)"];
 const DEFAULT_POLL_MS = Number(process.env.CHAIN_POLL_INTERVAL_MS ?? 15000);
 const BTC_API_BASE = process.env.BTC_API_BASE ?? "https://blockstream.info/api";
+const TRON_GRID_API_BASE = process.env.TRON_GRID_API_BASE ?? "https://api.trongrid.io";
+const TRON_PRO_API_KEY = process.env.TRON_PRO_API_KEY ?? "";
 
 const providers = new Map<string, JsonRpcProvider>();
 let timer: NodeJS.Timeout | null = null;
@@ -72,9 +74,58 @@ async function getBitcoinBalanceAtomic(address: string): Promise<bigint> {
   return funded - spent; // satoshis
 }
 
+type TronAccountResponse = {
+  data?: Array<{
+    balance?: number;
+    trc20?: Array<Record<string, string>>;
+  }>;
+};
+
+async function getTronAccount(address: string): Promise<TronAccountResponse | null> {
+  const headers: Record<string, string> = {};
+  if (TRON_PRO_API_KEY) headers["TRON-PRO-API-KEY"] = TRON_PRO_API_KEY;
+  const res = await fetch(`${TRON_GRID_API_BASE}/v1/accounts/${encodeURIComponent(address)}`, { headers });
+  if (!res.ok) throw new Error(`TRON API error: ${res.status}`);
+  return (await res.json()) as TronAccountResponse;
+}
+
+function normalizeHexAddress(address: string): string {
+  return address.toLowerCase().trim();
+}
+
+async function getTronBalanceAtomic(row: AddressRow): Promise<bigint> {
+  const account = await getTronAccount(row.address);
+  const first = account?.data?.[0];
+  if (!first) return 0n;
+
+  // Native TRX is returned in SUN (1e6).
+  if (!row.contractAddress) {
+    const sun = BigInt(Math.max(0, Number(first.balance ?? 0)));
+    return sun;
+  }
+
+  // TRC20 balances are returned as integer atomic strings keyed by contract address.
+  const target = normalizeHexAddress(row.contractAddress);
+  const trc20Rows = first.trc20 ?? [];
+  for (const tokenMap of trc20Rows) {
+    for (const [contract, bal] of Object.entries(tokenMap)) {
+      if (normalizeHexAddress(contract) !== target) continue;
+      try {
+        return BigInt(bal);
+      } catch {
+        return 0n;
+      }
+    }
+  }
+  return 0n;
+}
+
 async function getOnchainBalanceAtomic(row: AddressRow): Promise<bigint | null> {
   if (row.chainSlug === "bitcoin") {
     return getBitcoinBalanceAtomic(row.address);
+  }
+  if (row.chainSlug === "tron") {
+    return getTronBalanceAtomic(row);
   }
 
   // Free-RPC MVP currently supports EVM chains directly.

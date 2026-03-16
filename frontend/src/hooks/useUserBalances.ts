@@ -4,6 +4,20 @@ import { useAuth } from "@/context/AuthContext";
 import { DEFAULT_WATCHLIST, type TokenSymbol } from "@/lib/tokens";
 
 export type Balances = Record<TokenSymbol, number>;
+export type PortfolioItem = {
+  symbol: string;
+  balance: number;
+  priceUsd: number | null;
+  valueUsd: number | null;
+  priceUpdatedAt: string | null;
+  priceStale: boolean;
+};
+
+export type PortfolioSummary = {
+  totalValueUsd: number;
+  items: PortfolioItem[];
+  updatedAt: string;
+};
 
 function zeroBalances(symbols: TokenSymbol[]): Balances {
   return symbols.reduce((acc, s) => {
@@ -23,25 +37,29 @@ export function useUserBalances(symbols: TokenSymbol[] = DEFAULT_WATCHLIST) {
   const userId = user?.id;
 
   const [remote, setRemote] = useState<Record<string, number> | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioSummary | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setRemote(null);
+    setPortfolio(null);
     if (!accessToken) return;
 
     fetch(`${API_BASE}/balances`, { headers: getAuthHeaders() })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
-        return data as { balances?: Record<string, number> };
+        return data as { balances?: Record<string, number>; portfolio?: PortfolioSummary };
       })
       .then((data) => {
         if (cancelled) return;
         setRemote(data.balances ?? {});
+        setPortfolio(data.portfolio ?? null);
       })
       .catch(() => {
         if (cancelled) return;
         setRemote({});
+        setPortfolio(null);
       });
 
     return () => {
@@ -59,5 +77,5 @@ export function useUserBalances(symbols: TokenSymbol[] = DEFAULT_WATCHLIST) {
     return base;
   }, [symbols, remote]);
 
-  return { balances };
+  return { balances, portfolio };
 }

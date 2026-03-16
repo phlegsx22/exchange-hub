@@ -21,8 +21,12 @@ export default function Assets() {
   const [search, setSearch] = useState("");
   const [hideSmall, setHideSmall] = useState(false);
   const [showBalances, setShowBalances] = useState(true);
-  const { balances } = useUserBalances(DEFAULT_WATCHLIST);
+  const { balances, portfolio } = useUserBalances(DEFAULT_WATCHLIST);
   const tickers = useBinanceTickers(DEFAULT_WATCHLIST);
+  const portfolioItemBySymbol = useMemo(
+    () => new Map((portfolio?.items ?? []).map((item) => [item.symbol, item])),
+    [portfolio]
+  );
 
   const rows = useMemo(() => {
     const base = DEFAULT_WATCHLIST.map((symbol) => {
@@ -30,9 +34,11 @@ export default function Assets() {
       const total = balances[symbol] ?? 0;
       const available = total; // until we have open orders
       const inOrder = 0;
-      const price = tickers[symbol]?.priceUsd ?? meta.fixedUsdPrice ?? 0;
+      const backendPrice = portfolioItemBySymbol.get(symbol)?.priceUsd ?? null;
+      const price = backendPrice ?? tickers[symbol]?.priceUsd ?? meta.fixedUsdPrice ?? 0;
       const changePct = tickers[symbol]?.change24hPct ?? 0;
-      const value = total * price;
+      const backendValue = portfolioItemBySymbol.get(symbol)?.valueUsd ?? null;
+      const value = backendValue ?? total * price;
       return {
         symbol,
         name: meta.name,
@@ -46,9 +52,9 @@ export default function Assets() {
     });
     const totalValue = base.reduce((sum, r) => sum + r.value, 0);
     return { base, totalValue };
-  }, [balances, tickers]);
+  }, [balances, portfolioItemBySymbol, tickers]);
 
-  const totalValue = rows.totalValue;
+  const totalValue = portfolio?.totalValueUsd ?? rows.totalValue;
   const btcPrice = tickers.BTC?.priceUsd ?? TOKENS.BTC.fixedUsdPrice ?? 0;
   const btcEquivalent = btcPrice > 0 ? totalValue / btcPrice : 0;
 
