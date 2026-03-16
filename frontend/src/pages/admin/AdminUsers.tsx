@@ -14,12 +14,12 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
   Search, Filter, MoreHorizontal, Eye, Ban, ShieldCheck,
-  UserCheck, AlertTriangle, Download, Mail
+  UserCheck, AlertTriangle, Download, Mail, CheckCircle2, XCircle, Wallet, Loader2
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { API_BASE, getAuthHeaders } from "@/lib/api";
+import { api, API_BASE, getAuthHeaders } from "@/lib/api";
 
 const statusColors: Record<string, string> = {
   active: "bg-buy/10 text-buy border-buy/20",
@@ -64,29 +64,33 @@ export default function AdminUsers() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [processingKycUserId, setProcessingKycUserId] = useState<string | null>(null);
+  const [seedingUserId, setSeedingUserId] = useState<string | null>(null);
 
   const totalUsers = users.length;
+
+  const loadUsers = async (opts?: { search?: string; statusFilter?: string }) => {
+    const nextSearch = opts?.search ?? search;
+    const nextStatus = opts?.statusFilter ?? statusFilter;
+    const qs = new URLSearchParams();
+    if (nextSearch.trim()) qs.set("q", nextSearch.trim());
+    if (nextStatus !== "all") qs.set("status", nextStatus);
+    qs.set("limit", "200");
+
+    const res = await fetch(`${API_BASE}/admin/users?${qs.toString()}`, { headers: getAuthHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
+    setUsers(((data as { users?: AdminUser[] }).users ?? []));
+  };
 
   useEffect(() => {
     let cancelled = false;
     const t = setTimeout(() => {
       setLoading(true);
       setError(null);
-
-      const qs = new URLSearchParams();
-      if (search.trim()) qs.set("q", search.trim());
-      if (statusFilter !== "all") qs.set("status", statusFilter);
-      qs.set("limit", "200");
-
-      fetch(`${API_BASE}/admin/users?${qs.toString()}`, { headers: getAuthHeaders() })
-        .then(async (res) => {
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
-          return data as { users: AdminUser[] };
-        })
-        .then((data) => {
+      loadUsers({ search, statusFilter })
+        .then(() => {
           if (cancelled) return;
-          setUsers(data.users ?? []);
         })
         .catch((e: unknown) => {
           if (cancelled) return;
@@ -104,6 +108,58 @@ export default function AdminUsers() {
       clearTimeout(t);
     };
   }, [search, statusFilter]);
+
+  async function getLatestKycSubmissionForUser(userId: string) {
+    const res = await api.adminKycSubmissions({ q: userId, limit: 100 });
+    return (res.submissions ?? []).find((s) => s.userId === userId) ?? null;
+  }
+
+  async function quickReviewKyc(user: AdminUser, decision: "approved" | "rejected") {
+    setError(null);
+    setProcessingKycUserId(user.id);
+    try {
+      const latest = await getLatestKycSubmissionForUser(user.id);
+      if (!latest) {
+        throw new Error("No KYC submission found for this user.");
+      }
+
+      let rejectionReason: string | undefined;
+      if (decision === "rejected") {
+        const reason = window.prompt("Enter rejection reason for this KYC decision:");
+        if (!reason || !reason.trim()) {
+          throw new Error("Rejection reason is required.");
+        }
+        rejectionReason = reason.trim();
+      }
+
+      await api.adminReviewKycSubmission(latest.id, {
+        decision,
+        rejectionReason,
+        reviewNotes: "Reviewed from Admin Users quick actions.",
+      });
+
+      await loadUsers();
+
+      if (decision === "approved") {
+        const shouldSeed = window.confirm(
+          `KYC approved for ${user.name}. Seed deposit addresses now?`
+        );
+        if (shouldSeed) {
+          setSeedingUserId(user.id);
+          try {
+            await api.adminSeedUserDepositAddresses(user.id);
+            await loadUsers();
+          } finally {
+            setSeedingUserId(null);
+          }
+        }
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to review KYC");
+    } finally {
+      setProcessingKycUserId(null);
+    }
+  }
 
   const toggleFeature = async (userId: string, feature: keyof AdminUser["features"]) => {
     const current = users.find((u) => u.id === userId);
@@ -249,6 +305,56 @@ export default function AdminUsers() {
                           <Eye className="h-3.5 w-3.5 mr-2" /> View Details
                         </DropdownMenuItem>
                         <DropdownMenuItem><Mail className="h-3.5 w-3.5 mr-2" /> Send Email</DropdownMenuItem>
+                        {user.kycStatus !== "verified" && (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void quickReviewKyc(user, "approved");
+                            }}
+                            disabled={processingKycUserId === user.id || seedingUserId === user.id}
+                          >
+                            {processingKycUserId === user.id ? (
+                              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+                            )}
+                            Approve KYC
+                          </DropdownMenuItem>
+                        )}
+                        {user.kycStatus !== "rejected" && user.kycStatus !== "not_started" && (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void quickReviewKyc(user, "rejected");
+                            }}
+                            disabled={processingKycUserId === user.id || seedingUserId === user.id}
+                          >
+                            <XCircle className="h-3.5 w-3.5 mr-2" /> Reject KYC
+                          </DropdownMenuItem>
+                        )}
+                        {user.kycStatus === "verified" && (
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSeedingUserId(user.id);
+                              void api
+                                .adminSeedUserDepositAddresses(user.id)
+                                .then(() => loadUsers())
+                                .catch((err: unknown) =>
+                                  setError(err instanceof Error ? err.message : "Failed to seed addresses")
+                                )
+                                .finally(() => setSeedingUserId(null));
+                            }}
+                            disabled={processingKycUserId === user.id || seedingUserId === user.id}
+                          >
+                            {seedingUserId === user.id ? (
+                              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                            ) : (
+                              <Wallet className="h-3.5 w-3.5 mr-2" />
+                            )}
+                            Seed deposit addresses
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         {user.status !== "suspended" && (
                           <DropdownMenuItem onClick={(e) => { e.stopPropagation(); changeStatus(user.id, "suspended"); }}>
@@ -314,6 +420,45 @@ export default function AdminUsers() {
               </div>
             </div>
             <DialogFooter className="gap-2">
+              {selectedUser.kycStatus !== "verified" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void quickReviewKyc(selectedUser, "approved")}
+                  disabled={processingKycUserId === selectedUser.id || seedingUserId === selectedUser.id}
+                >
+                  {processingKycUserId === selectedUser.id ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Approve KYC
+                </Button>
+              )}
+              {selectedUser.kycStatus === "verified" && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSeedingUserId(selectedUser.id);
+                    void api
+                      .adminSeedUserDepositAddresses(selectedUser.id)
+                      .then(() => loadUsers())
+                      .catch((err: unknown) =>
+                        setError(err instanceof Error ? err.message : "Failed to seed addresses")
+                      )
+                      .finally(() => setSeedingUserId(null));
+                  }}
+                  disabled={processingKycUserId === selectedUser.id || seedingUserId === selectedUser.id}
+                >
+                  {seedingUserId === selectedUser.id ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Seed Addresses
+                </Button>
+              )}
               {selectedUser.status !== "blacklisted" ? (
                 <Button variant="destructive" size="sm" onClick={() => { changeStatus(selectedUser.id, "blacklisted"); setSelectedUser(null); }}>
                   <Ban className="h-3.5 w-3.5 mr-1.5" /> Blacklist User

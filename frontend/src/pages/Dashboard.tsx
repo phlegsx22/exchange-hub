@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Send, ArrowLeftRight, TrendingUp,
   Eye, EyeOff, PieChart, Bell, Shield, ShieldCheck, Clock, Activity,
-  Zap, ChevronRight, Flame, Star, BarChart3, Copy
+  Zap, ChevronRight, Flame, Star, BarChart3, Copy, FileCheck2
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
@@ -12,6 +12,7 @@ import { TokenIcon } from "@/components/TokenIcon";
 import { useBinanceTickers } from "@/hooks/useBinanceTickers";
 import { useUserBalances } from "@/hooks/useUserBalances";
 import { useRecentActivity } from "@/hooks/useRecentActivity";
+import { useAuth } from "@/context/AuthContext";
 
 const portfolioChart = Array.from({ length: 30 }, (_, i) => ({
   day: i,
@@ -25,6 +26,7 @@ const notifications = [
 ];
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [showBalances, setShowBalances] = useState(true);
   const { balances } = useUserBalances(DEFAULT_WATCHLIST);
   const tickers = useBinanceTickers(DEFAULT_WATCHLIST);
@@ -101,6 +103,8 @@ export default function Dashboard() {
 
   const totalValue = holdings.totalValue;
   const [onlineCount, setOnlineCount] = useState(48293);
+  const isKycApproved = user?.kycStatus === "approved";
+  const kycStatus = (user?.kycStatus ?? "none").replace("_", " ");
 
   useEffect(() => {
     const t2 = setInterval(() => setOnlineCount(prev => prev + Math.floor((Math.random() - 0.45) * 30)), 5000);
@@ -173,6 +177,24 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="space-y-3">
+          <div className="rounded-lg border bg-card p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold">KYC Status</p>
+                <p className="text-xs text-muted-foreground capitalize">{kycStatus}</p>
+              </div>
+              <Link to="/kyc">
+                <Button size="sm" variant={isKycApproved ? "outline" : "default"}>
+                  {isKycApproved ? "View KYC" : "Start KYC"}
+                </Button>
+              </Link>
+            </div>
+            {!isKycApproved && (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Deposits, withdrawals, transfers and trading unlock after admin approval.
+              </p>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-2">
             {[
               { label: "Deposit", icon: Wallet, path: "/deposit", color: "text-buy" },
@@ -180,8 +202,18 @@ export default function Dashboard() {
               { label: "Transfer", icon: ArrowLeftRight, path: "/transfer", color: "text-foreground" },
               { label: "Trade", icon: TrendingUp, path: "/trade", color: "text-foreground" },
             ].map((action) => (
-              <Link key={action.label} to={action.path}>
-                <div className="flex flex-col items-center gap-2 p-3 rounded-lg border hover:bg-muted/50 hover:-translate-y-0.5 transition-all cursor-pointer group">
+              <Link
+                key={action.label}
+                to={isKycApproved ? action.path : "/kyc"}
+                title={isKycApproved ? action.label : "KYC approval required"}
+              >
+                <div
+                  className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-all group ${
+                    isKycApproved
+                      ? "hover:bg-muted/50 hover:-translate-y-0.5 cursor-pointer"
+                      : "opacity-60"
+                  }`}
+                >
                   <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center group-hover:bg-foreground group-hover:text-background transition-colors">
                     <action.icon className="h-4 w-4" />
                   </div>
@@ -209,6 +241,23 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+          <div className="rounded-lg border bg-card p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold flex items-center gap-1.5">
+                  <FileCheck2 className="h-3.5 w-3.5" /> Identity Verification
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Start or continue your KYC process to unlock full wallet access.
+                </p>
+              </div>
+              <Link to="/kyc">
+                <Button size="sm" className="gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Start KYC
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
@@ -293,12 +342,12 @@ export default function Dashboard() {
               Deposits, trades, transfers, and withdrawals will appear here.
             </p>
             <div className="mt-4 flex flex-col sm:flex-row items-center justify-center gap-2">
-              <Link to="/deposit">
+              <Link to={isKycApproved ? "/deposit" : "/kyc"}>
                 <Button size="sm" className="gap-1.5">
                   <Wallet className="h-3.5 w-3.5" /> Make a deposit
                 </Button>
               </Link>
-              <Link to="/trade">
+              <Link to={isKycApproved ? "/trade" : "/kyc"}>
                 <Button size="sm" variant="outline" className="gap-1.5">
                   <TrendingUp className="h-3.5 w-3.5" /> Start trading
                 </Button>

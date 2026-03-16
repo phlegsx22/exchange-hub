@@ -255,7 +255,10 @@ export const api = {
     }>(res);
   },
 
-  async uploadKycMedia(file: File, kind: "document" | "selfie") {
+  async uploadKycMedia(
+    file: File,
+    kind: "document" | "selfie" | "document_back" | "proof_of_address"
+  ) {
     let sigRes: Response;
     try {
       sigRes = await fetch(`${API_BASE}/kyc/upload-signature`, {
@@ -310,9 +313,19 @@ export const api = {
     dateOfBirth: string;
     countryOfResidence: string;
     address: string;
+    phoneNumber?: string;
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
     documentType: "passport" | "national_id" | "drivers_license";
+    documentNumber?: string;
     documentUrl?: string;
+    documentBackUrl?: string;
+    proofOfAddressUrl?: string;
     selfieUrl?: string;
+    ocrConfidence?: number;
+    faceMatchScore?: number;
+    livenessScore?: number;
+    ocrExtractedText?: string;
   }) {
     let res: Response;
     try {
@@ -435,6 +448,112 @@ export const api = {
       throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ ok: true; user: AdminUserRow }>(res);
+  },
+
+  async adminKycSubmissions(params?: {
+    status?: "pending" | "under_review" | "approved" | "rejected";
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.q) qs.set("q", params.q);
+    if (typeof params?.limit === "number") qs.set("limit", String(params.limit));
+    if (typeof params?.offset === "number") qs.set("offset", String(params.offset));
+
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/kyc/submissions?${qs.toString()}`, { headers: getAuthHeaders() });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      submissions: Array<{
+        id: string;
+        userId: string;
+        userEmail: string;
+        userName: string;
+        status: string;
+        firstName: string;
+        lastName: string;
+        dateOfBirth: string;
+        countryOfResidence: string;
+        address: string;
+        phoneNumber: string | null;
+        emergencyContactName: string | null;
+        emergencyContactPhone: string | null;
+        documentType: string;
+        documentNumber: string | null;
+        documentUrl: string | null;
+        documentBackUrl: string | null;
+        proofOfAddressUrl: string | null;
+        selfieUrl: string | null;
+        ocrConfidence: number | null;
+        faceMatchScore: number | null;
+        livenessScore: number | null;
+        rejectionReason: string | null;
+        reviewNotes: string | null;
+        reviewedAt: string | null;
+        submittedAt: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(res);
+  },
+
+  async adminReviewKycSubmission(
+    submissionId: string,
+    body: {
+      decision: "under_review" | "approved" | "rejected";
+      rejectionReason?: string;
+      reviewNotes?: string;
+    }
+  ) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/kyc/submissions/${encodeURIComponent(submissionId)}/review`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      submission: {
+        id: string;
+        userId: string;
+        status: string;
+        rejectionReason: string | null;
+        reviewNotes: string | null;
+        reviewedAt: string | null;
+      };
+    }>(res);
+  },
+
+  async adminSeedUserDepositAddresses(userId: string, assetNetworkIds?: string[]) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/seed-deposit-addresses`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ assetNetworkIds }),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      userId: string;
+      userName: string;
+      createdWallets: number;
+      createdAddresses: number;
+      skipped: number;
+    }>(res);
   },
 
   async adminAssetNetworks() {

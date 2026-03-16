@@ -30,7 +30,8 @@ import AdminLogs from "./pages/admin/AdminLogs";
 import AdminBlacklist from "./pages/admin/AdminBlacklist";
 import AdminAlerts from "./pages/admin/AdminAlerts";
 import AdminSettings from "./pages/admin/AdminSettings";
-import { RequireAdmin, RequireVerified, RedirectIfAuthenticated } from "@/components/RouteGuards";
+import AdminKyc from "./pages/admin/AdminKyc";
+import { RequireAdmin, RequireVerified, RequireKycApproved, RedirectIfAuthenticated } from "@/components/RouteGuards";
 
 const queryClient = new QueryClient();
 
@@ -82,6 +83,7 @@ const App = () => (
               <Route path="users" element={<AdminUsers />} />
               <Route path="wallets" element={<AdminWallets />} />
               <Route path="assets" element={<AdminAssets />} />
+              <Route path="kyc" element={<AdminKyc />} />
               <Route path="features" element={<AdminFeatures />} />
               <Route path="logs" element={<AdminLogs />} />
               <Route path="blacklist" element={<AdminBlacklist />} />
@@ -140,7 +142,9 @@ const App = () => (
                 path="/deposit"
                 element={
                   <RequireVerified>
-                    <Deposit />
+                    <RequireKycApproved>
+                      <Deposit />
+                    </RequireKycApproved>
                   </RequireVerified>
                 }
               />
@@ -148,7 +152,9 @@ const App = () => (
                 path="/withdraw"
                 element={
                   <RequireVerified>
-                    <Withdraw />
+                    <RequireKycApproved>
+                      <Withdraw />
+                    </RequireKycApproved>
                   </RequireVerified>
                 }
               />
@@ -156,7 +162,9 @@ const App = () => (
                 path="/transfer"
                 element={
                   <RequireVerified>
-                    <Transfer />
+                    <RequireKycApproved>
+                      <Transfer />
+                    </RequireKycApproved>
                   </RequireVerified>
                 }
               />
@@ -164,7 +172,9 @@ const App = () => (
                 path="/trade"
                 element={
                   <RequireVerified>
-                    <Trade />
+                    <RequireKycApproved>
+                      <Trade />
+                    </RequireKycApproved>
                   </RequireVerified>
                 }
               />

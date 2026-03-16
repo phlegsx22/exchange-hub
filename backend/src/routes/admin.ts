@@ -19,6 +19,16 @@ import {
 
 const router = Router();
 
+const kycReviewSchema = z.object({
+  decision: z.enum(["under_review", "approved", "rejected"]),
+  rejectionReason: z.string().max(2000).optional(),
+  reviewNotes: z.string().max(4000).optional(),
+});
+
+const seedUserAddressesSchema = z.object({
+  assetNetworkIds: z.array(z.string().uuid()).optional(),
+});
+
 type SeedChain = {
   slug: string;
   name: string;
@@ -734,6 +744,276 @@ router.patch(
     } catch (err) {
       console.error("Admin update features failed:", err);
       res.status(500).json({ error: "Failed to update features", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+// --- Admin KYC review + post-approval seeding ---
+
+router.get(
+  "/kyc/submissions",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const status = typeof req.query.status === "string" ? req.query.status.trim() : "";
+    const q = typeof req.query.q === "string" ? req.query.q.trim().toLowerCase() : "";
+    const limitRaw = typeof req.query.limit === "string" ? Number(req.query.limit) : 50;
+    const offsetRaw = typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+
+    try {
+      const whereParts: Array<ReturnType<typeof eq>> = [];
+      if (status && ["pending", "under_review", "approved", "rejected"].includes(status)) {
+        whereParts.push(eq(kycSubmissions.status, status as typeof kycSubmissions.status.enumValues[number]));
+      }
+
+      const where =
+        whereParts.length === 0
+          ? undefined
+          : whereParts.length === 1
+            ? whereParts[0]
+            : and(...whereParts);
+
+      const rows = await db
+        .select({
+          id: kycSubmissions.id,
+          userId: users.id,
+          userEmail: users.email,
+          userName: users.name,
+          status: kycSubmissions.status,
+          firstName: kycSubmissions.firstName,
+          lastName: kycSubmissions.lastName,
+          dateOfBirth: kycSubmissions.dateOfBirth,
+          countryOfResidence: kycSubmissions.countryOfResidence,
+          address: kycSubmissions.address,
+          phoneNumber: kycSubmissions.phoneNumber,
+          emergencyContactName: kycSubmissions.emergencyContactName,
+          emergencyContactPhone: kycSubmissions.emergencyContactPhone,
+          documentType: kycSubmissions.documentType,
+          documentNumber: kycSubmissions.documentNumber,
+          documentUrl: kycSubmissions.documentUrl,
+          documentBackUrl: kycSubmissions.documentBackUrl,
+          proofOfAddressUrl: kycSubmissions.proofOfAddressUrl,
+          selfieUrl: kycSubmissions.selfieUrl,
+          ocrConfidence: kycSubmissions.ocrConfidence,
+          faceMatchScore: kycSubmissions.faceMatchScore,
+          livenessScore: kycSubmissions.livenessScore,
+          rejectionReason: kycSubmissions.rejectionReason,
+          reviewNotes: kycSubmissions.reviewNotes,
+          reviewedAt: kycSubmissions.reviewedAt,
+          submittedAt: kycSubmissions.submittedAt,
+        })
+        .from(kycSubmissions)
+        .innerJoin(users, eq(kycSubmissions.userId, users.id))
+        .where(where)
+        .orderBy(desc(kycSubmissions.submittedAt))
+        .limit(limit)
+        .offset(offset);
+
+      const filtered = q
+        ? rows.filter((r) =>
+            `${r.userName} ${r.userEmail} ${r.firstName} ${r.lastName} ${r.documentNumber ?? ""}`
+              .toLowerCase()
+              .includes(q)
+          )
+        : rows;
+
+      res.json({
+        ok: true,
+        submissions: filtered.map((r) => ({
+          ...r,
+          ocrConfidence: r.ocrConfidence == null ? null : Number(r.ocrConfidence),
+          faceMatchScore: r.faceMatchScore == null ? null : Number(r.faceMatchScore),
+          livenessScore: r.livenessScore == null ? null : Number(r.livenessScore),
+        })),
+        total: filtered.length,
+        limit,
+        offset,
+      });
+    } catch (err) {
+      console.error("Admin list KYC submissions failed:", err);
+      res.status(500).json({ error: "Failed to load KYC submissions", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+router.patch(
+  "/kyc/submissions/:id/review",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized", code: "NO_TOKEN" });
+      return;
+    }
+    const parsed = kycReviewSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", issues: parsed.error.flatten() });
+      return;
+    }
+    const { decision, rejectionReason, reviewNotes } = parsed.data;
+    const submissionId = req.params.id;
+
+    if (decision === "rejected" && !rejectionReason?.trim()) {
+      res.status(400).json({ error: "Rejection reason is required", code: "VALIDATION_FAILED" });
+      return;
+    }
+
+    try {
+      const [existing] = await db
+        .select({ id: kycSubmissions.id, userId: kycSubmissions.userId })
+        .from(kycSubmissions)
+        .where(eq(kycSubmissions.id, submissionId))
+        .limit(1);
+      if (!existing) {
+        res.status(404).json({ error: "KYC submission not found", code: "NOT_FOUND" });
+        return;
+      }
+
+      const [updated] = await db
+        .update(kycSubmissions)
+        .set({
+          status: decision,
+          rejectionReason: decision === "rejected" ? rejectionReason?.trim() ?? null : null,
+          reviewNotes: reviewNotes?.trim() || null,
+          reviewedAt: new Date(),
+          reviewedBy: req.user.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(kycSubmissions.id, submissionId))
+        .returning({
+          id: kycSubmissions.id,
+          userId: kycSubmissions.userId,
+          status: kycSubmissions.status,
+          rejectionReason: kycSubmissions.rejectionReason,
+          reviewNotes: kycSubmissions.reviewNotes,
+          reviewedAt: kycSubmissions.reviewedAt,
+        });
+
+      await db
+        .update(users)
+        .set({
+          kycStatus: decision,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, existing.userId));
+
+      res.json({ ok: true, submission: updated });
+    } catch (err) {
+      console.error("Admin review KYC submission failed:", err);
+      res.status(500).json({ error: "Failed to review KYC submission", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+router.post(
+  "/users/:id/seed-deposit-addresses",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.params.id;
+    const parsed = seedUserAddressesSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", issues: parsed.error.flatten() });
+      return;
+    }
+
+    try {
+      const [user] = await db
+        .select({
+          id: users.id,
+          name: users.name,
+          role: users.role,
+          kycStatus: users.kycStatus,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!user || user.role !== "user") {
+        res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
+        return;
+      }
+      if (user.kycStatus !== "approved") {
+        res.status(403).json({
+          error: "KYC must be approved before seeding deposit addresses",
+          code: "KYC_NOT_APPROVED",
+        });
+        return;
+      }
+
+      const selectedIds = parsed.data.assetNetworkIds ?? [];
+      const selectedSet = new Set(selectedIds);
+      const options = await db
+        .select({
+          id: assetNetworks.id,
+          coin: assets.symbol,
+          chainSlug: chains.slug,
+          isDepositEnabled: assetNetworks.isDepositEnabled,
+        })
+        .from(assetNetworks)
+        .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
+        .innerJoin(chains, eq(assetNetworks.chainId, chains.id));
+
+      const targets = options.filter(
+        (o) =>
+          o.isDepositEnabled &&
+          (selectedSet.size === 0 || selectedSet.has(o.id))
+      );
+      if (targets.length === 0) {
+        res.status(400).json({ error: "No eligible asset networks selected", code: "VALIDATION_FAILED" });
+        return;
+      }
+
+      let createdWallets = 0;
+      let createdAddresses = 0;
+      let skipped = 0;
+
+      for (const t of targets) {
+        const [existingWallet] = await db
+          .select({ id: walletAccounts.id })
+          .from(walletAccounts)
+          .where(and(eq(walletAccounts.userId, userId), eq(walletAccounts.assetNetworkId, t.id)))
+          .limit(1);
+        if (!existingWallet) {
+          await db.insert(walletAccounts).values({
+            userId,
+            assetNetworkId: t.id,
+            status: "active",
+          });
+          createdWallets += 1;
+        }
+
+        const [existingAddress] = await db
+          .select({ id: depositAddresses.id })
+          .from(depositAddresses)
+          .where(and(eq(depositAddresses.userId, userId), eq(depositAddresses.assetNetworkId, t.id)))
+          .limit(1);
+        if (existingAddress) {
+          skipped += 1;
+          continue;
+        }
+
+        const address = `seed:${t.chainSlug}:${t.coin}:${userId.slice(0, 8)}:${t.id.slice(0, 8)}`;
+        await db.insert(depositAddresses).values({
+          userId,
+          assetNetworkId: t.id,
+          address,
+        });
+        createdAddresses += 1;
+      }
+
+      res.status(201).json({
+        ok: true,
+        userId,
+        userName: user.name,
+        createdWallets,
+        createdAddresses,
+        skipped,
+      });
+    } catch (err) {
+      console.error("Seed deposit addresses failed:", err);
+      res.status(500).json({ error: "Failed to seed deposit addresses", code: "SERVER_ERROR" });
     }
   }
 );

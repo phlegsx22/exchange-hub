@@ -67,6 +67,31 @@ export function RequireVerified({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Requires user KYC status to be approved for sensitive user actions.
+ */
+export function RequireKycApproved({ children }: { children: ReactNode }) {
+  const { status, accessToken, user, isAdmin } = useAuth();
+
+  if (status === "loading") {
+    return <LoadingScreen />;
+  }
+
+  if (!accessToken) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (isAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (user?.kycStatus !== "approved") {
+    return <Navigate to="/kyc" replace state={{ reason: "KYC approval required for this action." }} />;
+  }
+
+  return <>{children}</>;
+}
+
+/**
  * Requires user to be authenticated AND be an admin.
  * Admins have completely separate access from regular users.
  */

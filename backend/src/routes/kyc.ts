@@ -71,9 +71,22 @@ router.post("/submit", authMiddleware, requireVerified, requireAccountActive, as
         dateOfBirth: data.dateOfBirth,
         countryOfResidence: data.countryOfResidence,
         address: data.address,
+        phoneNumber: data.phoneNumber ?? null,
+        emergencyContactName: data.emergencyContactName ?? null,
+        emergencyContactPhone: data.emergencyContactPhone ?? null,
         documentType: data.documentType,
+        documentNumber: data.documentNumber ?? null,
         documentUrl: data.documentUrl ?? null,
+        documentBackUrl: data.documentBackUrl ?? null,
+        proofOfAddressUrl: data.proofOfAddressUrl ?? null,
         selfieUrl: data.selfieUrl ?? null,
+        ocrConfidence:
+          typeof data.ocrConfidence === "number" ? String(data.ocrConfidence) : null,
+        faceMatchScore:
+          typeof data.faceMatchScore === "number" ? String(data.faceMatchScore) : null,
+        livenessScore:
+          typeof data.livenessScore === "number" ? String(data.livenessScore) : null,
+        ocrExtractedText: data.ocrExtractedText ?? null,
         status: "pending",
       })
       .returning();
@@ -127,7 +140,13 @@ router.post(
     }
 
     const kindRaw = (req.body?.kind as string | undefined) ?? "";
-    const kind = kindRaw === "document" || kindRaw === "selfie" ? kindRaw : null;
+    const kind =
+      kindRaw === "document" ||
+      kindRaw === "selfie" ||
+      kindRaw === "document_back" ||
+      kindRaw === "proof_of_address"
+        ? kindRaw
+        : null;
     if (!kind) {
       res.status(400).json({ error: "Invalid kind", code: "VALIDATION_FAILED" });
       return;

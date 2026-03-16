@@ -1,6 +1,11 @@
 import { Router, Response } from "express";
 import { and, eq } from "drizzle-orm";
-import { authMiddleware, requireAccountActive, requireVerified } from "../middleware/auth.js";
+import {
+  authMiddleware,
+  requireAccountActive,
+  requireKycApproved,
+  requireVerified,
+} from "../middleware/auth.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import { assetNetworks, assets, chains, db, depositAddresses } from "../db/index.js";
 
@@ -29,7 +34,13 @@ router.get("/supported", authMiddleware, requireVerified, requireAccountActive, 
   }
 });
 
-router.post("/deposit-address", authMiddleware, requireVerified, requireAccountActive, async (req: AuthRequest, res: Response) => {
+router.post(
+  "/deposit-address",
+  authMiddleware,
+  requireVerified,
+  requireAccountActive,
+  requireKycApproved,
+  async (req: AuthRequest, res: Response) => {
   if (!req.user) {
     res.status(401).json({ error: "Unauthorized", code: "NO_TOKEN" });
     return;
@@ -88,7 +99,8 @@ router.post("/deposit-address", authMiddleware, requireVerified, requireAccountA
     console.error("Deposit address failed:", err);
     res.status(500).json({ error: "Failed to create deposit address", code: "SERVER_ERROR" });
   }
-});
+  }
+);
 
 export default router;
 

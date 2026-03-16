@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ const steps = [
 
 export default function KYC() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState(1);
 
   const [loadingStatus, setLoadingStatus] = useState(true);
@@ -29,20 +30,34 @@ export default function KYC() {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [countryOfResidence, setCountryOfResidence] = useState<string>("");
   const [address, setAddress] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [emergencyContactName, setEmergencyContactName] = useState("");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
 
   const [documentType, setDocumentType] = useState<"passport" | "national_id" | "drivers_license" | "">("");
+  const [documentNumber, setDocumentNumber] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentBackFile, setDocumentBackFile] = useState<File | null>(null);
+  const [proofOfAddressFile, setProofOfAddressFile] = useState<File | null>(null);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
 
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [documentBackUrl, setDocumentBackUrl] = useState<string | null>(null);
+  const [proofOfAddressUrl, setProofOfAddressUrl] = useState<string | null>(null);
   const [selfieUrl, setSelfieUrl] = useState<string | null>(null);
 
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadingSelfie, setUploadingSelfie] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const redirectReason =
+    typeof (location.state as { reason?: unknown } | null)?.reason === "string"
+      ? ((location.state as { reason?: string }).reason ?? null)
+      : null;
 
   const docInputRef = useRef<HTMLInputElement | null>(null);
+  const docBackInputRef = useRef<HTMLInputElement | null>(null);
+  const proofInputRef = useRef<HTMLInputElement | null>(null);
   const selfieInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -74,11 +89,17 @@ export default function KYC() {
       lastName.trim().length > 0 &&
       dateOfBirth.trim().length > 0 &&
       countryOfResidence.trim().length === 2 &&
-      address.trim().length > 0
+      address.trim().length > 0 &&
+      phoneNumber.trim().length >= 6 &&
+      emergencyContactName.trim().length > 0 &&
+      emergencyContactPhone.trim().length >= 6
     );
-  }, [firstName, lastName, dateOfBirth, countryOfResidence, address]);
+  }, [firstName, lastName, dateOfBirth, countryOfResidence, address, phoneNumber, emergencyContactName, emergencyContactPhone]);
 
-  async function uploadIfNeeded(kind: "document" | "selfie", file: File | null): Promise<string | null> {
+  async function uploadIfNeeded(
+    kind: "document" | "selfie" | "document_back" | "proof_of_address",
+    file: File | null
+  ): Promise<string | null> {
     if (!file) return null;
     const result = await api.uploadKycMedia(file, kind);
     return result.url;
@@ -90,6 +111,10 @@ export default function KYC() {
       setFormError("Please select a document type.");
       return;
     }
+    if (!documentNumber.trim()) {
+      setFormError("Please provide your document number.");
+      return;
+    }
     if (!documentFile) {
       setFormError("Please upload a document image or PDF.");
       return;
@@ -98,7 +123,11 @@ export default function KYC() {
     setUploadingDoc(true);
     try {
       const url = await uploadIfNeeded("document", documentFile);
+      const backUrl = await uploadIfNeeded("document_back", documentBackFile);
+      const proofUrl = await uploadIfNeeded("proof_of_address", proofOfAddressFile);
       setDocumentUrl(url);
+      setDocumentBackUrl(backUrl);
+      setProofOfAddressUrl(proofUrl);
       setStep(3);
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Failed to upload document");
@@ -135,8 +164,14 @@ export default function KYC() {
         dateOfBirth,
         countryOfResidence: countryOfResidence.toLowerCase(),
         address: address.trim(),
+        phoneNumber: phoneNumber.trim(),
+        emergencyContactName: emergencyContactName.trim(),
+        emergencyContactPhone: emergencyContactPhone.trim(),
         documentType: documentType as "passport" | "national_id" | "drivers_license",
+        documentNumber: documentNumber.trim(),
         documentUrl: documentUrl ?? undefined,
+        documentBackUrl: documentBackUrl ?? undefined,
+        proofOfAddressUrl: proofOfAddressUrl ?? undefined,
         selfieUrl: sUrl ?? undefined,
       });
 
@@ -187,11 +222,11 @@ export default function KYC() {
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Clock className="h-4 w-4" />
-            <span>Verification takes ~5 minutes</span>
+            <span>Manual review typically takes 5-30 minutes</span>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Zap className="h-4 w-4" />
-            <span>AI-powered instant approval</span>
+            <span>Free-stack OCR + liveness assistive checks</span>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Lock className="h-4 w-4" />
@@ -231,9 +266,11 @@ export default function KYC() {
             </p>
           </div>
 
-          {(loadingStatus || statusError || currentStatus !== "none") && (
+          {(redirectReason || loadingStatus || statusError || currentStatus !== "none") && (
             <div className="mb-4 rounded-lg border p-3 text-sm">
-              {loadingStatus ? (
+              {redirectReason ? (
+                <p className="text-muted-foreground">{redirectReason}</p>
+              ) : loadingStatus ? (
                 <p className="text-muted-foreground">Loading your KYC status…</p>
               ) : statusError ? (
                 <p className="text-destructive">{statusError}</p>
@@ -285,6 +322,20 @@ export default function KYC() {
                 <Label>Address</Label>
                 <Input placeholder="123 Main Street" value={address} onChange={(e) => setAddress(e.target.value)} />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input placeholder="+1 555 123 4567" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Emergency Contact Name</Label>
+                  <Input placeholder="Jane Doe" value={emergencyContactName} onChange={(e) => setEmergencyContactName(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Emergency Contact Phone</Label>
+                <Input placeholder="+1 555 111 2222" value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} />
+              </div>
               <Button className="w-full" size="lg" onClick={() => setStep(2)} disabled={!canContinueStep1}>
                 Continue
               </Button>
@@ -303,6 +354,14 @@ export default function KYC() {
                     <SelectItem value="drivers_license">Driver's License</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Document Number</Label>
+                <Input
+                  placeholder="Enter your passport/ID number"
+                  value={documentNumber}
+                  onChange={(e) => setDocumentNumber(e.target.value)}
+                />
               </div>
               <input
                 ref={docInputRef}
@@ -336,6 +395,44 @@ export default function KYC() {
                   </p>
                 )}
               </div>
+              <input
+                ref={docBackInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setDocumentBackFile(f);
+                  setDocumentBackUrl(null);
+                }}
+              />
+              <Button variant="outline" size="sm" type="button" onClick={() => docBackInputRef.current?.click()}>
+                Upload back of ID (optional)
+              </Button>
+              {documentBackFile && (
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Back side: <span className="font-medium text-foreground">{documentBackFile.name}</span>
+                </p>
+              )}
+              <input
+                ref={proofInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setProofOfAddressFile(f);
+                  setProofOfAddressUrl(null);
+                }}
+              />
+              <Button variant="outline" size="sm" type="button" onClick={() => proofInputRef.current?.click()}>
+                Upload proof of address (optional)
+              </Button>
+              {proofOfAddressFile && (
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Proof of address: <span className="font-medium text-foreground">{proofOfAddressFile.name}</span>
+                </p>
+              )}
               <div className="rounded-lg bg-muted/50 p-3 flex items-start gap-2">
                 <ShieldCheck className="h-4 w-4 text-buy mt-0.5 shrink-0" />
                 <p className="text-xs text-muted-foreground">Your documents are encrypted and processed by our AI verification system. They are never shared with third parties.</p>

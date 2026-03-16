@@ -136,6 +136,22 @@ export function requireVerified(req: AuthRequest, res: Response, next: NextFunct
   next();
 }
 
+export function requireKycApproved(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.status(401).json({ error: "Unauthorized", code: "NO_TOKEN" });
+    return;
+  }
+  if (req.user.kycStatus !== "approved") {
+    res.status(403).json({
+      error: "KYC approval required",
+      code: "KYC_NOT_APPROVED",
+      status: req.user.kycStatus,
+    });
+    return;
+  }
+  next();
+}
+
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
   if (!req.user) {
     res.status(401).json({ error: "Unauthorized", code: "NO_TOKEN" });
