@@ -30,12 +30,8 @@ export default function KYC() {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [countryOfResidence, setCountryOfResidence] = useState<string>("");
   const [address, setAddress] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [emergencyContactName, setEmergencyContactName] = useState("");
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
 
   const [documentType, setDocumentType] = useState<"passport" | "national_id" | "drivers_license" | "">("");
-  const [documentNumber, setDocumentNumber] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentBackFile, setDocumentBackFile] = useState<File | null>(null);
   const [proofOfAddressFile, setProofOfAddressFile] = useState<File | null>(null);
@@ -89,12 +85,9 @@ export default function KYC() {
       lastName.trim().length > 0 &&
       dateOfBirth.trim().length > 0 &&
       countryOfResidence.trim().length === 2 &&
-      address.trim().length > 0 &&
-      phoneNumber.trim().length >= 6 &&
-      emergencyContactName.trim().length > 0 &&
-      emergencyContactPhone.trim().length >= 6
+      address.trim().length > 0
     );
-  }, [firstName, lastName, dateOfBirth, countryOfResidence, address, phoneNumber, emergencyContactName, emergencyContactPhone]);
+  }, [firstName, lastName, dateOfBirth, countryOfResidence, address]);
 
   async function uploadIfNeeded(
     kind: "document" | "selfie" | "document_back" | "proof_of_address",
@@ -109,10 +102,6 @@ export default function KYC() {
     setFormError(null);
     if (!documentType) {
       setFormError("Please select a document type.");
-      return;
-    }
-    if (!documentNumber.trim()) {
-      setFormError("Please provide your document number.");
       return;
     }
     if (!documentFile) {
@@ -164,11 +153,7 @@ export default function KYC() {
         dateOfBirth,
         countryOfResidence: countryOfResidence.toLowerCase(),
         address: address.trim(),
-        phoneNumber: phoneNumber.trim(),
-        emergencyContactName: emergencyContactName.trim(),
-        emergencyContactPhone: emergencyContactPhone.trim(),
         documentType: documentType as "passport" | "national_id" | "drivers_license",
-        documentNumber: documentNumber.trim(),
         documentUrl: documentUrl ?? undefined,
         documentBackUrl: documentBackUrl ?? undefined,
         proofOfAddressUrl: proofOfAddressUrl ?? undefined,
@@ -322,20 +307,6 @@ export default function KYC() {
                 <Label>Address</Label>
                 <Input placeholder="123 Main Street" value={address} onChange={(e) => setAddress(e.target.value)} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Phone Number</Label>
-                  <Input placeholder="+1 555 123 4567" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Emergency Contact Name</Label>
-                  <Input placeholder="Jane Doe" value={emergencyContactName} onChange={(e) => setEmergencyContactName(e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Emergency Contact Phone</Label>
-                <Input placeholder="+1 555 111 2222" value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} />
-              </div>
               <Button className="w-full" size="lg" onClick={() => setStep(2)} disabled={!canContinueStep1}>
                 Continue
               </Button>
@@ -354,14 +325,6 @@ export default function KYC() {
                     <SelectItem value="drivers_license">Driver's License</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Document Number</Label>
-                <Input
-                  placeholder="Enter your passport/ID number"
-                  value={documentNumber}
-                  onChange={(e) => setDocumentNumber(e.target.value)}
-                />
               </div>
               <input
                 ref={docInputRef}
