@@ -7,6 +7,8 @@ import adminRoutes from "./routes/admin.js";
 import balancesRoutes from "./routes/balances.js";
 import walletsRoutes from "./routes/wallets.js";
 import activityRoutes from "./routes/activity.js";
+import { startPriceFeed } from "./services/priceFeed.js";
+import { startDepositPoller } from "./services/depositPoller.js";
 
 const app = express();
 const PORT = process.env.PORT ?? process.env.API_PORT ?? process.env.SERVER_PORT ?? 3000;
@@ -54,6 +56,16 @@ app.use("/activity", activityRoutes);
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "exchange-hub-api" });
 });
+
+const stopPriceFeed = startPriceFeed();
+const stopDepositPoller = startDepositPoller();
+
+function shutdown(): void {
+  stopDepositPoller();
+  stopPriceFeed();
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
