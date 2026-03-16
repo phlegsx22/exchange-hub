@@ -12,9 +12,10 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Search, Filter, MoreHorizontal, Eye, Ban, ShieldCheck,
-  UserCheck, AlertTriangle, Download, Mail, CheckCircle2, XCircle, Wallet, Loader2
+  UserCheck, AlertTriangle, Download, Mail, CheckCircle2, XCircle, Wallet, Loader2, Trash2
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger
@@ -66,6 +67,11 @@ export default function AdminUsers() {
   const [error, setError] = useState<string | null>(null);
   const [processingKycUserId, setProcessingKycUserId] = useState<string | null>(null);
   const [seedingUserId, setSeedingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [rejectKycUser, setRejectKycUser] = useState<AdminUser | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [seedPromptUser, setSeedPromptUser] = useState<AdminUser | null>(null);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<AdminUser | null>(null);
 
   const totalUsers = users.length;
 
@@ -114,7 +120,11 @@ export default function AdminUsers() {
     return (res.submissions ?? []).find((s) => s.userId === userId) ?? null;
   }
 
-  async function quickReviewKyc(user: AdminUser, decision: "approved" | "rejected") {
+  async function quickReviewKyc(
+    user: AdminUser,
+    decision: "approved" | "rejected",
+    opts?: { rejectionReason?: string; skipSeedPrompt?: boolean }
+  ) {
     setError(null);
     setProcessingKycUserId(user.id);
     try {
@@ -123,13 +133,9 @@ export default function AdminUsers() {
         throw new Error("No KYC submission found for this user.");
       }
 
-      let rejectionReason: string | undefined;
-      if (decision === "rejected") {
-        const reason = window.prompt("Enter rejection reason for this KYC decision:");
-        if (!reason || !reason.trim()) {
-          throw new Error("Rejection reason is required.");
-        }
-        rejectionReason = reason.trim();
+      let rejectionReason: string | undefined = opts?.rejectionReason;
+      if (decision === "rejected" && !rejectionReason?.trim()) {
+        throw new Error("Rejection reason is required.");
       }
 
       await api.adminReviewKycSubmission(latest.id, {
@@ -140,24 +146,26 @@ export default function AdminUsers() {
 
       await loadUsers();
 
-      if (decision === "approved") {
-        const shouldSeed = window.confirm(
-          `KYC approved for ${user.name}. Seed deposit addresses now?`
-        );
-        if (shouldSeed) {
-          setSeedingUserId(user.id);
-          try {
-            await api.adminSeedUserDepositAddresses(user.id);
-            await loadUsers();
-          } finally {
-            setSeedingUserId(null);
-          }
-        }
+      if (decision === "approved" && !opts?.skipSeedPrompt) {
+        setSeedPromptUser(user);
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to review KYC");
     } finally {
       setProcessingKycUserId(null);
+    }
+  }
+
+  async function seedAddressesForUser(user: AdminUser) {
+    setSeedingUserId(user.id);
+    setError(null);
+    try {
+      await api.adminSeedUserDepositAddresses(user.id);
+      await loadUsers();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to seed addresses");
+    } finally {
+      setSeedingUserId(null);
     }
   }
 
@@ -206,6 +214,21 @@ export default function AdminUsers() {
       setError(e instanceof Error ? e.message : "Failed to update status");
     }
   };
+
+  async function deleteUser(user: AdminUser) {
+    setDeletingUserId(user.id);
+    setError(null);
+    try {
+      await api.adminDeleteUser(user.id);
+      setUsers((prev) => prev.filter((u) => u.id !== user.id));
+      if (selectedUser?.id === user.id) setSelectedUser(null);
+      setDeleteUserTarget(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to delete user");
+    } finally {
+      setDeletingUserId(null);
+    }
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
@@ -325,7 +348,8 @@ export default function AdminUsers() {
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              void quickReviewKyc(user, "rejected");
+                              setRejectKycUser(user);
+                              setRejectReason("");
                             }}
                             disabled={processingKycUserId === user.id || seedingUserId === user.id}
                           >
@@ -336,14 +360,7 @@ export default function AdminUsers() {
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSeedingUserId(user.id);
-                              void api
-                                .adminSeedUserDepositAddresses(user.id)
-                                .then(() => loadUsers())
-                                .catch((err: unknown) =>
-                                  setError(err instanceof Error ? err.message : "Failed to seed addresses")
-                                )
-                                .finally(() => setSeedingUserId(null));
+                              void seedAddressesForUser(user);
                             }}
                             disabled={processingKycUserId === user.id || seedingUserId === user.id}
                           >
@@ -371,6 +388,22 @@ export default function AdminUsers() {
                             <Ban className="h-3.5 w-3.5 mr-2" /> Blacklist
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteUserTarget(user);
+                          }}
+                          disabled={deletingUserId === user.id}
+                        >
+                          {deletingUserId === user.id ? (
+                            <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          )}
+                          Delete user
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -440,14 +473,7 @@ export default function AdminUsers() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    setSeedingUserId(selectedUser.id);
-                    void api
-                      .adminSeedUserDepositAddresses(selectedUser.id)
-                      .then(() => loadUsers())
-                      .catch((err: unknown) =>
-                        setError(err instanceof Error ? err.message : "Failed to seed addresses")
-                      )
-                      .finally(() => setSeedingUserId(null));
+                    void seedAddressesForUser(selectedUser);
                   }}
                   disabled={processingKycUserId === selectedUser.id || seedingUserId === selectedUser.id}
                 >
@@ -468,10 +494,116 @@ export default function AdminUsers() {
                   <ShieldCheck className="h-3.5 w-3.5 mr-1.5" /> Remove from Blacklist
                 </Button>
               )}
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteUserTarget(selectedUser)}
+                disabled={deletingUserId === selectedUser.id}
+              >
+                {deletingUserId === selectedUser.id ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Delete User
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Reject KYC Dialog */}
+      <Dialog open={!!rejectKycUser} onOpenChange={(open) => !open && setRejectKycUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reject KYC</DialogTitle>
+            <DialogDescription>
+              {rejectKycUser ? `Provide a rejection reason for ${rejectKycUser.name}.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Rejection reason</Label>
+            <Textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Explain what the user needs to correct..."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectKycUser(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!rejectKycUser) return;
+                void quickReviewKyc(rejectKycUser, "rejected", { rejectionReason: rejectReason });
+                setRejectKycUser(null);
+              }}
+              disabled={!rejectReason.trim() || (rejectKycUser != null && processingKycUserId === rejectKycUser.id)}
+            >
+              Reject KYC
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Seed prompt after approval */}
+      <Dialog open={!!seedPromptUser} onOpenChange={(open) => !open && setSeedPromptUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>KYC Approved</DialogTitle>
+            <DialogDescription>
+              {seedPromptUser
+                ? `KYC approved for ${seedPromptUser.name}. Seed deposit addresses now?`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSeedPromptUser(null)}>Later</Button>
+            <Button
+              onClick={() => {
+                if (!seedPromptUser) return;
+                void seedAddressesForUser(seedPromptUser);
+                setSeedPromptUser(null);
+              }}
+              disabled={seedPromptUser != null && seedingUserId === seedPromptUser.id}
+            >
+              Seed now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete user confirmation dialog */}
+      <Dialog open={!!deleteUserTarget} onOpenChange={(open) => !open && setDeleteUserTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              {deleteUserTarget
+                ? `Delete ${deleteUserTarget.name} (${deleteUserTarget.email})? This action cannot be undone.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteUserTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (!deleteUserTarget) return;
+                void deleteUser(deleteUserTarget);
+              }}
+              disabled={deleteUserTarget != null && deletingUserId === deleteUserTarget.id}
+            >
+              {deleteUserTarget != null && deletingUserId === deleteUserTarget.id ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              )}
+              Delete user
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

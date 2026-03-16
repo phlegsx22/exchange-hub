@@ -98,3 +98,60 @@ export async function sendPasswordResetEmail(
     text: `Reset your password: ${resetLink}`,
   });
 }
+
+function getAdminNotificationRecipients(): string[] {
+  const raw =
+    process.env.ADMIN_NOTIFICATION_EMAILS ??
+    process.env.ADMIN_EMAIL ??
+    process.env.SUPPORT_EMAIL ??
+    "";
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Send an operational/admin notification email for important user actions.
+ * If no admin recipients are configured, this is a no-op.
+ */
+export async function sendAdminNotificationEmail(params: {
+  subject: string;
+  title: string;
+  lines: string[];
+}): Promise<void> {
+  const recipients = getAdminNotificationRecipients();
+  if (recipients.length === 0) return;
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const from =
+    process.env.NOTIFY_FROM_EMAIL ??
+    process.env.EMAIL_FROM ??
+    "no-reply@annex-ebank.com";
+
+  const safeTitle = htmlEscape(params.title);
+  const safeLines = params.lines.map((l) => `<li>${htmlEscape(l)}</li>`).join("");
+  const html = `
+  <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;">
+    <h2 style="margin:0 0 12px;">${safeTitle}</h2>
+    <ul style="margin:0; padding-left:18px; color:#444;">
+      ${safeLines}
+    </ul>
+  </div>
+  `;
+  const text = [params.title, ...params.lines.map((l) => `- ${l}`)].join("\n");
+
+  if (!apiKey) {
+    console.log("[AdminNotify] RESEND_API_KEY missing; notification:", params.subject, params.lines.join(" | "));
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  await resend.emails.send({
+    from,
+    to: recipients,
+    subject: params.subject,
+    html,
+    text,
+  });
+}

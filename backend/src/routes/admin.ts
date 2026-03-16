@@ -748,6 +748,42 @@ router.patch(
   }
 );
 
+router.delete(
+  "/users/:id",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const id = req.params.id;
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized", code: "NO_TOKEN" });
+      return;
+    }
+    if (id === req.user.id) {
+      res.status(400).json({ error: "You cannot delete your own admin account", code: "VALIDATION_FAILED" });
+      return;
+    }
+
+    try {
+      const [target] = await db
+        .select({ id: users.id, role: users.role, email: users.email })
+        .from(users)
+        .where(eq(users.id, id))
+        .limit(1);
+
+      if (!target || target.role !== "user") {
+        res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
+        return;
+      }
+
+      await db.delete(users).where(eq(users.id, id));
+      res.json({ ok: true, id: target.id, email: target.email });
+    } catch (err) {
+      console.error("Admin delete user failed:", err);
+      res.status(500).json({ error: "Failed to delete user", code: "SERVER_ERROR" });
+    }
+  }
+);
+
 // --- Admin KYC review + post-approval seeding ---
 
 router.get(

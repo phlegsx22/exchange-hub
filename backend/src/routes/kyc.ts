@@ -5,6 +5,7 @@ import { eq, desc } from "drizzle-orm";
 import { kycSubmitSchema } from "../schemas/kyc.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import { authMiddleware, requireAccountActive, requireVerified } from "../middleware/auth.js";
+import { sendAdminNotificationEmail } from "../lib/email.js";
 
 const router = Router();
 
@@ -62,6 +63,20 @@ router.post("/submit", authMiddleware, requireVerified, requireAccountActive, as
   const data = parsed.data;
 
   try {
+    const [latest] = await db
+      .select({ id: kycSubmissions.id, status: kycSubmissions.status })
+      .from(kycSubmissions)
+      .where(eq(kycSubmissions.userId, req.user.id))
+      .orderBy(desc(kycSubmissions.submittedAt))
+      .limit(1);
+    if (latest && (latest.status === "pending" || latest.status === "under_review")) {
+      res.status(409).json({
+        error: "KYC is already in review",
+        code: "KYC_IN_REVIEW",
+      });
+      return;
+    }
+
     const [submission] = await db
       .insert(kycSubmissions)
       .values({
@@ -72,10 +87,7 @@ router.post("/submit", authMiddleware, requireVerified, requireAccountActive, as
         countryOfResidence: data.countryOfResidence,
         address: data.address,
         phoneNumber: data.phoneNumber ?? null,
-        emergencyContactName: data.emergencyContactName ?? null,
-        emergencyContactPhone: data.emergencyContactPhone ?? null,
         documentType: data.documentType,
-        documentNumber: data.documentNumber ?? null,
         documentUrl: data.documentUrl ?? null,
         documentBackUrl: data.documentBackUrl ?? null,
         proofOfAddressUrl: data.proofOfAddressUrl ?? null,
@@ -99,6 +111,18 @@ router.post("/submit", authMiddleware, requireVerified, requireAccountActive, as
         updatedAt: new Date(),
       })
       .where(eq(users.id, req.user.id));
+
+    await sendAdminNotificationEmail({
+      subject: "New KYC submission",
+      title: "User submitted KYC",
+      lines: [
+        `User ID: ${req.user.id}`,
+        `Email: ${req.user.email}`,
+        `Submission ID: ${submission?.id ?? "—"}`,
+        `Document type: ${data.documentType}`,
+        `Submitted at: ${new Date().toISOString()}`,
+      ],
+    });
 
     res.status(201).json({
       submissionId: submission?.id,

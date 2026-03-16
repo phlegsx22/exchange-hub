@@ -10,7 +10,7 @@ import {
   resendVerificationSchema,
 } from "../schemas/auth.js";
 import { signToken, authMiddleware, type AuthRequest } from "../middleware/auth.js";
-import { sendVerificationEmail } from "../lib/email.js";
+import { sendAdminNotificationEmail, sendVerificationEmail } from "../lib/email.js";
 import { z } from "zod";
 
 const router = Router();
@@ -89,6 +89,16 @@ router.post("/register", async (req: Request, res: Response) => {
     }
     const verificationLink = `${baseUrl}/verify-email?token=${token}`;
     await sendVerificationEmail(user.email, verificationLink);
+    await sendAdminNotificationEmail({
+      subject: "New user registration",
+      title: "New user registered",
+      lines: [
+        `User ID: ${user.id}`,
+        `Name: ${user.name}`,
+        `Email: ${user.email}`,
+        `Registered at: ${new Date().toISOString()}`,
+      ],
+    });
 
     res.status(201).json({
       ok: true,

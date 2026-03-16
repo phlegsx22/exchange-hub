@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { DEFAULT_WATCHLIST, type TokenSymbol } from "@/lib/tokens";
 import { useUserBalances } from "@/hooks/useUserBalances";
+import { api, type SupportedAssetNetwork } from "@/lib/api";
 
 const recentWithdrawals = [
   { coin: "BTC", amount: "0.05", address: "bc1q...7x4f", status: "Completed", time: "2d ago" },
@@ -18,10 +19,54 @@ const recentWithdrawals = [
 
 export default function Withdraw() {
   const [coin, setCoin] = useState("");
-  const [network, setNetwork] = useState("");
+  const [assetNetworkId, setAssetNetworkId] = useState("");
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [networks, setNetworks] = useState<SupportedAssetNetwork[]>([]);
   const { balances } = useUserBalances(DEFAULT_WATCHLIST);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    api
+      .supportedNetworks()
+      .then((r) => {
+        if (cancelled) return;
+        setNetworks((r.assetNetworks ?? []).filter((n) => n.isWithdrawEnabled));
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "Failed to load withdrawal networks");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const assets = useMemo(() => {
+    return Array.from(new Set(networks.map((n) => n.assetSymbol))).sort();
+  }, [networks]);
+
+  useEffect(() => {
+    if (!coin && assets.length > 0) setCoin(assets[0].toLowerCase());
+  }, [coin, assets]);
+
+  const assetNetworks = useMemo(() => {
+    const symbol = coin.toUpperCase();
+    return networks.filter((n) => n.assetSymbol === symbol);
+  }, [networks, coin]);
+
+  useEffect(() => {
+    setAssetNetworkId(assetNetworks[0]?.id ?? "");
+  }, [assetNetworks]);
 
   const selectedSymbol = useMemo<TokenSymbol | null>(() => {
     switch (coin) {
@@ -40,6 +85,39 @@ export default function Withdraw() {
 
   const available = selectedSymbol ? (balances[selectedSymbol] ?? 0) : 0;
 
+  async function handleWithdrawRequest(): Promise<void> {
+    setError(null);
+    setSuccess(null);
+    if (!assetNetworkId) {
+      setError("Select a network.");
+      return;
+    }
+    if (!address.trim()) {
+      setError("Enter destination wallet address.");
+      return;
+    }
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setError("Enter a valid amount.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.withdrawRequest({
+        assetNetworkId,
+        toAddress: address.trim(),
+        amount: amt,
+      });
+      setSuccess("Withdrawal request submitted. Admin will review it.");
+      setAmount("");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to submit withdrawal request");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="container py-8 max-w-2xl space-y-6">
       <div>
@@ -53,27 +131,36 @@ export default function Withdraw() {
       <div className="grid lg:grid-cols-[1fr,280px] gap-6">
         {/* Withdraw form */}
         <div className="rounded-lg border bg-card p-6 space-y-4">
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-lg border border-buy/30 bg-buy/5 p-3 text-sm text-buy">
+              {success}
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Select Coin</Label>
-            <Select value={coin} onValueChange={setCoin}>
+            <Select value={coin} onValueChange={setCoin} disabled={loading || assets.length === 0}>
               <SelectTrigger><SelectValue placeholder="Choose asset" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="btc">BTC - Bitcoin</SelectItem>
-                <SelectItem value="eth">ETH - Ethereum</SelectItem>
-                <SelectItem value="usdt">USDT - Tether</SelectItem>
-                <SelectItem value="sol">SOL - Solana</SelectItem>
+                {assets.map((a) => (
+                  <SelectItem key={a} value={a.toLowerCase()}>{a}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
             <Label>Network</Label>
-            <Select value={network} onValueChange={setNetwork}>
+            <Select value={assetNetworkId} onValueChange={setAssetNetworkId} disabled={loading || assetNetworks.length === 0}>
               <SelectTrigger><SelectValue placeholder="Select network" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="erc20">ERC-20 (Ethereum)</SelectItem>
-                <SelectItem value="trc20">TRC-20 (Tron)</SelectItem>
-                <SelectItem value="bep20">BEP-20 (BSC)</SelectItem>
+                {assetNetworks.map((n) => (
+                  <SelectItem key={n.id} value={n.id}>{n.chainName} ({n.chainSlug})</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -125,7 +212,9 @@ export default function Withdraw() {
             </p>
           </div>
 
-          <Button className="w-full gap-2" size="lg">Withdraw <ArrowRight className="h-4 w-4" /></Button>
+          <Button className="w-full gap-2" size="lg" onClick={() => void handleWithdrawRequest()} disabled={submitting || loading}>
+            {submitting ? "Submitting..." : "Withdraw"} <ArrowRight className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Sidebar */}

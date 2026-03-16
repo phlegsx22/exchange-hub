@@ -16,6 +16,66 @@ const steps = [
   { id: 3, label: "Selfie Verification", icon: Camera, desc: "Face match" },
 ];
 
+const COUNTRIES: Array<{ code: string; name: string }> = [
+  { code: "us", name: "United States" },
+  { code: "ca", name: "Canada" },
+  { code: "mx", name: "Mexico" },
+  { code: "br", name: "Brazil" },
+  { code: "ar", name: "Argentina" },
+  { code: "cl", name: "Chile" },
+  { code: "co", name: "Colombia" },
+  { code: "pe", name: "Peru" },
+  { code: "uy", name: "Uruguay" },
+  { code: "gb", name: "United Kingdom" },
+  { code: "de", name: "Germany" },
+  { code: "fr", name: "France" },
+  { code: "es", name: "Spain" },
+  { code: "it", name: "Italy" },
+  { code: "nl", name: "Netherlands" },
+  { code: "be", name: "Belgium" },
+  { code: "pt", name: "Portugal" },
+  { code: "ie", name: "Ireland" },
+  { code: "ch", name: "Switzerland" },
+  { code: "at", name: "Austria" },
+  { code: "se", name: "Sweden" },
+  { code: "no", name: "Norway" },
+  { code: "dk", name: "Denmark" },
+  { code: "fi", name: "Finland" },
+  { code: "pl", name: "Poland" },
+  { code: "cz", name: "Czech Republic" },
+  { code: "hu", name: "Hungary" },
+  { code: "ro", name: "Romania" },
+  { code: "gr", name: "Greece" },
+  { code: "ua", name: "Ukraine" },
+  { code: "tr", name: "Turkey" },
+  { code: "ru", name: "Russia" },
+  { code: "ae", name: "United Arab Emirates" },
+  { code: "sa", name: "Saudi Arabia" },
+  { code: "qa", name: "Qatar" },
+  { code: "kw", name: "Kuwait" },
+  { code: "eg", name: "Egypt" },
+  { code: "ma", name: "Morocco" },
+  { code: "za", name: "South Africa" },
+  { code: "ng", name: "Nigeria" },
+  { code: "ke", name: "Kenya" },
+  { code: "gh", name: "Ghana" },
+  { code: "in", name: "India" },
+  { code: "pk", name: "Pakistan" },
+  { code: "bd", name: "Bangladesh" },
+  { code: "lk", name: "Sri Lanka" },
+  { code: "cn", name: "China" },
+  { code: "jp", name: "Japan" },
+  { code: "kr", name: "South Korea" },
+  { code: "sg", name: "Singapore" },
+  { code: "my", name: "Malaysia" },
+  { code: "th", name: "Thailand" },
+  { code: "vn", name: "Vietnam" },
+  { code: "id", name: "Indonesia" },
+  { code: "ph", name: "Philippines" },
+  { code: "au", name: "Australia" },
+  { code: "nz", name: "New Zealand" },
+];
+
 export default function KYC() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,6 +90,7 @@ export default function KYC() {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [countryOfResidence, setCountryOfResidence] = useState<string>("");
   const [address, setAddress] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
 
   const [documentType, setDocumentType] = useState<"passport" | "national_id" | "drivers_license" | "">("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
@@ -50,6 +111,7 @@ export default function KYC() {
     typeof (location.state as { reason?: unknown } | null)?.reason === "string"
       ? ((location.state as { reason?: string }).reason ?? null)
       : null;
+  const kycInReview = currentStatus === "pending" || currentStatus === "under_review";
 
   const docInputRef = useRef<HTMLInputElement | null>(null);
   const docBackInputRef = useRef<HTMLInputElement | null>(null);
@@ -85,9 +147,10 @@ export default function KYC() {
       lastName.trim().length > 0 &&
       dateOfBirth.trim().length > 0 &&
       countryOfResidence.trim().length === 2 &&
-      address.trim().length > 0
+      address.trim().length > 0 &&
+      phoneNumber.trim().length >= 6
     );
-  }, [firstName, lastName, dateOfBirth, countryOfResidence, address]);
+  }, [firstName, lastName, dateOfBirth, countryOfResidence, address, phoneNumber]);
 
   async function uploadIfNeeded(
     kind: "document" | "selfie" | "document_back" | "proof_of_address",
@@ -153,6 +216,7 @@ export default function KYC() {
         dateOfBirth,
         countryOfResidence: countryOfResidence.toLowerCase(),
         address: address.trim(),
+        phoneNumber: phoneNumber.trim(),
         documentType: documentType as "passport" | "national_id" | "drivers_license",
         documentUrl: documentUrl ?? undefined,
         documentBackUrl: documentBackUrl ?? undefined,
@@ -274,7 +338,16 @@ export default function KYC() {
             </div>
           )}
 
-          {step === 1 && (
+          {kycInReview && (
+            <div className="rounded-lg border bg-card p-4 text-sm">
+              <p className="font-medium">KYC is in review</p>
+              <p className="text-muted-foreground mt-1">
+                Your verification has already been submitted. You cannot submit another one until review is completed.
+              </p>
+            </div>
+          )}
+
+          {!kycInReview && step === 1 && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -295,11 +368,9 @@ export default function KYC() {
                 <Select value={countryOfResidence} onValueChange={setCountryOfResidence}>
                   <SelectTrigger><SelectValue placeholder="Select country" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="us">United States</SelectItem>
-                    <SelectItem value="uk">United Kingdom</SelectItem>
-                    <SelectItem value="de">Germany</SelectItem>
-                    <SelectItem value="jp">Japan</SelectItem>
-                    <SelectItem value="sg">Singapore</SelectItem>
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>{c.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -307,13 +378,17 @@ export default function KYC() {
                 <Label>Address</Label>
                 <Input placeholder="123 Main Street" value={address} onChange={(e) => setAddress(e.target.value)} />
               </div>
+              <div className="space-y-2">
+                <Label>Phone Number</Label>
+                <Input placeholder="+1 555 123 4567" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+              </div>
               <Button className="w-full" size="lg" onClick={() => setStep(2)} disabled={!canContinueStep1}>
                 Continue
               </Button>
             </div>
           )}
 
-          {step === 2 && (
+          {!kycInReview && step === 2 && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Document Type</Label>
@@ -409,7 +484,7 @@ export default function KYC() {
             </div>
           )}
 
-          {step === 3 && (
+          {!kycInReview && step === 3 && (
             <div className="space-y-4">
               <input
                 ref={selfieInputRef}

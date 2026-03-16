@@ -177,24 +177,22 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="space-y-3">
-          <div className="rounded-lg border bg-card p-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold">KYC Status</p>
-                <p className="text-xs text-muted-foreground capitalize">{kycStatus}</p>
+          {!isKycApproved && (
+            <div className="rounded-lg border bg-card p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold">KYC Status</p>
+                  <p className="text-xs text-muted-foreground capitalize">{kycStatus}</p>
+                </div>
+                <Link to="/kyc">
+                  <Button size="sm">Start KYC</Button>
+                </Link>
               </div>
-              <Link to="/kyc">
-                <Button size="sm" variant={isKycApproved ? "outline" : "default"}>
-                  {isKycApproved ? "View KYC" : "Start KYC"}
-                </Button>
-              </Link>
-            </div>
-            {!isKycApproved && (
               <p className="mt-2 text-[11px] text-muted-foreground">
                 Deposits, withdrawals, transfers and trading unlock after admin approval.
               </p>
-            )}
-          </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             {[
               { label: "Deposit", icon: Wallet, path: "/deposit", color: "text-buy" },
@@ -243,23 +241,25 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
-          <div className="rounded-lg border bg-card p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="text-xs font-semibold flex items-center gap-1.5">
-                  <FileCheck2 className="h-3.5 w-3.5" /> Identity Verification
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Start or continue your KYC process to unlock full wallet access.
-                </p>
+          {!isKycApproved && (
+            <div className="rounded-lg border bg-card p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold flex items-center gap-1.5">
+                    <FileCheck2 className="h-3.5 w-3.5" /> Identity Verification
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Start or continue your KYC process to unlock full wallet access.
+                  </p>
+                </div>
+                <Link to="/kyc">
+                  <Button size="sm" className="gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5" /> Start KYC
+                  </Button>
+                </Link>
               </div>
-              <Link to="/kyc">
-                <Button size="sm" className="gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Start KYC
-                </Button>
-              </Link>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

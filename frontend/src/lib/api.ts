@@ -367,6 +367,23 @@ export const api = {
     return handleResponse<{ ok: true; address: string; memo: string | null; isPlaceholder: boolean }>(res);
   },
 
+  async withdrawRequest(body: { assetNetworkId: string; toAddress: string; amount: string | number }) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/wallets/withdrawals/request`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      withdrawal: { id?: string; status: string; createdAt: string | Date };
+    }>(res);
+  },
+
   async recentActivity(params?: { limit?: number }) {
     const limit = params?.limit ?? 10;
     let res: Response;
@@ -424,6 +441,19 @@ export const api = {
       throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ ok: true; user: AdminUserRow }>(res);
+  },
+
+  async adminDeleteUser(userId: string) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{ ok: true; id: string; email: string }>(res);
   },
 
   async adminSetUserFeatures(
