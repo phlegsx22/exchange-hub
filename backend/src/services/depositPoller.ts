@@ -23,7 +23,7 @@ type AddressRow = {
 };
 
 const ERC20_ABI = ["function balanceOf(address owner) view returns (uint256)"];
-const DEFAULT_POLL_MS = Number(process.env.CHAIN_POLL_INTERVAL_MS ?? 15000);
+const DEFAULT_POLL_MS = Number(process.env.CHAIN_POLL_INTERVAL_MS ?? 60000);
 const BTC_API_BASE = process.env.BTC_API_BASE ?? "https://blockstream.info/api";
 const TRON_GRID_API_BASE = process.env.TRON_GRID_API_BASE ?? "https://api.trongrid.io";
 const TRON_PRO_API_KEY = process.env.TRON_PRO_API_KEY ?? "";
@@ -272,7 +272,7 @@ async function pollOnce(): Promise<void> {
 }
 
 export function startDepositPoller(): () => void {
-  const interval = Number.isFinite(DEFAULT_POLL_MS) && DEFAULT_POLL_MS > 0 ? DEFAULT_POLL_MS : 15000;
+  const interval = Number.isFinite(DEFAULT_POLL_MS) && DEFAULT_POLL_MS > 0 ? DEFAULT_POLL_MS : 60000;
   timer = setInterval(() => {
     void pollOnce();
   }, interval);
