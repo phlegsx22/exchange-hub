@@ -1030,7 +1030,7 @@ router.post(
           continue;
         }
 
-        const address = `seed:${t.chainSlug}:${t.coin}:${userId.slice(0, 8)}:${t.id.slice(0, 8)}`;
+        const address = `seed:${t.chainSlug}:${t.coin}:${userId}:${t.id}`;
         await db.insert(depositAddresses).values({
           userId,
           assetNetworkId: t.id,
@@ -1092,6 +1092,7 @@ router.get(
           userId: users.id,
           userName: users.name,
           coin: assets.symbol,
+          network: chains.name,
           address: depositAddresses.address,
           createdAt: walletAccounts.createdAt,
           balance: sql<string>`COALESCE(SUM(${ledgerEntries.amount}), 0)`,
@@ -1099,6 +1100,7 @@ router.get(
         .from(walletAccounts)
         .innerJoin(users, eq(walletAccounts.userId, users.id))
         .innerJoin(assetNetworks, eq(walletAccounts.assetNetworkId, assetNetworks.id))
+        .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
         .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
         .leftJoin(
           depositAddresses,
@@ -1119,6 +1121,7 @@ router.get(
           users.id,
           users.name,
           assets.symbol,
+          chains.name,
           depositAddresses.address,
           walletAccounts.createdAt
         )
@@ -1134,6 +1137,7 @@ router.get(
           userId: r.userId,
           userName: r.userName,
           coin: r.coin,
+          network: r.network,
           balance: Number.isFinite(bal) ? bal : 0,
           frozen: Number.isFinite(frz) ? frz : 0,
           address: r.address ?? "—",
@@ -1171,6 +1175,19 @@ router.post(
       }
       if (u.accountStatus === "blacklisted") {
         res.status(400).json({ error: "Cannot create wallet for blacklisted user", code: "VALIDATION_FAILED" });
+        return;
+      }
+      const [uKyc] = await db
+        .select({ role: users.role, kycStatus: users.kycStatus })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!uKyc || uKyc.role !== "user") {
+        res.status(400).json({ error: "Wallet can only be created for regular users", code: "VALIDATION_FAILED" });
+        return;
+      }
+      if (uKyc.kycStatus !== "approved") {
+        res.status(403).json({ error: "User KYC must be approved before wallet creation", code: "KYC_NOT_APPROVED" });
         return;
       }
 
@@ -1251,7 +1268,7 @@ router.post(
         });
 
       const metaRow = await db
-        .select({ chainSlug: chains.slug, coin: assets.symbol })
+        .select({ chainSlug: chains.slug, chainName: chains.name, coin: assets.symbol })
         .from(assetNetworks)
         .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
         .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
@@ -1259,8 +1276,8 @@ router.post(
         .limit(1)
         .then((r) => r[0]);
 
-      // Placeholder deposit address for MVP (real address generation comes later).
-      const addr = `pending:${metaRow?.chainSlug ?? "chain"}:${metaRow?.coin ?? "asset"}:${wallet.id.slice(0, 8)}`;
+      // Deterministic unique placeholder address (user+network scoped, globally unique string).
+      const addr = `pending:${metaRow?.chainSlug ?? "chain"}:${metaRow?.coin ?? "asset"}:${userId}:${selectedAssetNetworkId}`;
       await db.insert(depositAddresses).values({
         userId,
         assetNetworkId: selectedAssetNetworkId,
@@ -1274,6 +1291,7 @@ router.post(
           userId,
           userName: u.name,
           coin: metaRow?.coin ?? coin,
+          network: metaRow?.chainName ?? "—",
           balance: 0,
           frozen: 0,
           address: addr,
@@ -1324,12 +1342,14 @@ router.patch(
         .select({
           userName: users.name,
           coin: assets.symbol,
+          network: chains.name,
           address: depositAddresses.address,
           balance: sql<string>`COALESCE(SUM(${ledgerEntries.amount}), 0)`,
         })
         .from(users)
         .innerJoin(walletAccounts, eq(walletAccounts.userId, users.id))
         .innerJoin(assetNetworks, eq(walletAccounts.assetNetworkId, assetNetworks.id))
+        .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
         .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
         .leftJoin(
           depositAddresses,
@@ -1351,6 +1371,7 @@ router.patch(
           userId: w.userId,
           userName: row?.userName ?? "—",
           coin: row?.coin ?? "—",
+          network: row?.network ?? "—",
           balance: Number(row?.balance ?? 0) || 0,
           frozen: Number(w.frozen ?? 0) || 0,
           address: row?.address ?? "—",

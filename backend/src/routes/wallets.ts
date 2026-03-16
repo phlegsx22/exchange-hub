@@ -89,8 +89,8 @@ router.post(
       return;
     }
 
-    // Placeholder until we integrate a real address provider / custody system.
-    const addr = `pending:${an.chainSlug}:${an.assetSymbol}:${req.user.id.slice(0, 8)}`;
+    // Deterministic unique placeholder address per user+network (no two users share).
+    const addr = `pending:${an.chainSlug}:${an.assetSymbol}:${req.user.id}:${assetNetworkId}`;
     await db.insert(depositAddresses).values({
       userId: req.user.id,
       assetNetworkId,

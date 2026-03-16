@@ -238,6 +238,7 @@ export const depositAddresses = pgTable(
   },
   (t) => [
     uniqueIndex("deposit_address_user_asset_network_unique").on(t.userId, t.assetNetworkId),
+    uniqueIndex("deposit_address_unique").on(t.address),
     index("deposit_address_user_idx").on(t.userId),
   ]
 );

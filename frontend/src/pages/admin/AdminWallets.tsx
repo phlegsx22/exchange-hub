@@ -20,7 +20,7 @@ export default function AdminWallets() {
   const [search, setSearch] = useState("");
   const [coinFilter, setCoinFilter] = useState("all");
   const [wallets, setWallets] = useState<AdminWallet[]>([]);
-  const [users, setUsers] = useState<{ id: string; name: string; status: string }[]>([]);
+  const [users, setUsers] = useState<{ id: string; name: string; status: string; kycStatus?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -53,7 +53,7 @@ export default function AdminWallets() {
       fetch(`${API_BASE}/admin/users?limit=200`, { headers: getAuthHeaders() }).then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
-        return data as { users: { id: string; name: string; status: string }[] };
+        return data as { users: { id: string; name: string; status: string; kycStatus?: string }[] };
       }),
       fetch(`${API_BASE}/admin/asset-networks`, { headers: getAuthHeaders() }).then(async (res) => {
         const data = await res.json().catch(() => ({}));
@@ -87,6 +87,7 @@ export default function AdminWallets() {
     userId: string;
     userName: string;
     coin: string;
+    network?: string;
     balance: number;
     frozen: number;
     address: string;
@@ -222,6 +223,7 @@ export default function AdminWallets() {
               <TableRow>
                 <TableHead>User</TableHead>
                 <TableHead>Coin</TableHead>
+                <TableHead className="hidden md:table-cell">Network</TableHead>
                 <TableHead>Balance</TableHead>
                 <TableHead className="hidden md:table-cell">Frozen</TableHead>
                 <TableHead className="hidden md:table-cell">Address</TableHead>
@@ -237,6 +239,7 @@ export default function AdminWallets() {
                     <p className="text-xs text-muted-foreground">{w.userId}</p>
                   </TableCell>
                   <TableCell><Badge variant="outline">{w.coin}</Badge></TableCell>
+                  <TableCell className="hidden md:table-cell">{w.network ?? "—"}</TableCell>
                   <TableCell className="font-mono text-sm">{w.balance.toFixed(w.coin === "BTC" ? 4 : w.coin === "ETH" ? 3 : 2)}</TableCell>
                   <TableCell className="hidden md:table-cell font-mono text-sm text-sell">{w.frozen > 0 ? w.frozen.toFixed(2) : "—"}</TableCell>
                   <TableCell className="hidden md:table-cell">
@@ -272,11 +275,14 @@ export default function AdminWallets() {
               <Select value={newWalletUser} onValueChange={setNewWalletUser}>
                 <SelectTrigger><SelectValue placeholder="Select user..." /></SelectTrigger>
                 <SelectContent>
-                  {users.filter(u => u.status !== "blacklisted").map(u => (
+                  {users.filter(u => u.status !== "blacklisted" && u.kycStatus === "verified").map(u => (
                     <SelectItem key={u.id} value={u.id}>{u.name} ({u.id})</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Only KYC-approved users are eligible for wallet/address seeding.
+              </p>
             </div>
             <div>
               <Label>Coin</Label>
