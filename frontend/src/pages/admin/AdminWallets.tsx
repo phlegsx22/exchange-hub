@@ -16,10 +16,66 @@ const walletStatusColors: Record<string, string> = {
   pending: "bg-warning/10 text-warning border-warning/20",
 };
 
+type WalletStatus = "active" | "frozen" | "pending";
+type AdminWalletApiRow = {
+  id: string;
+  userId: string;
+  userName: string;
+  coin: string;
+  network?: string;
+  balance: number;
+  frozen: number;
+  address: string;
+  status: WalletStatus;
+  createdAt: string;
+};
+
+type AdminNetworkWalletRow = {
+  id: string;
+  userId: string;
+  userName: string;
+  network: string;
+  balance: number;
+  frozen: number;
+  address: string;
+  status: WalletStatus;
+  createdAt: string;
+};
+
+function aggregateWalletsByNetwork(rows: AdminWalletApiRow[]): AdminNetworkWalletRow[] {
+  const rank: Record<WalletStatus, number> = { active: 1, pending: 2, frozen: 3 };
+  const map = new Map<string, AdminNetworkWalletRow>();
+  for (const row of rows) {
+    const network = row.network ?? "—";
+    const key = `${row.userId}::${network}::${row.address}`;
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, {
+        id: row.id,
+        userId: row.userId,
+        userName: row.userName,
+        network,
+        balance: Number(row.balance ?? 0) || 0,
+        frozen: Number(row.frozen ?? 0) || 0,
+        address: row.address,
+        status: row.status,
+        createdAt: row.createdAt,
+      });
+      continue;
+    }
+    existing.balance += Number(row.balance ?? 0) || 0;
+    existing.frozen += Number(row.frozen ?? 0) || 0;
+    if (rank[row.status] > rank[existing.status]) {
+      existing.status = row.status;
+      existing.id = row.id;
+    }
+  }
+  return Array.from(map.values());
+}
+
 export default function AdminWallets() {
   const [search, setSearch] = useState("");
-  const [coinFilter, setCoinFilter] = useState("all");
-  const [wallets, setWallets] = useState<AdminWallet[]>([]);
+  const [wallets, setWallets] = useState<AdminNetworkWalletRow[]>([]);
   const [users, setUsers] = useState<{ id: string; name: string; status: string; kycStatus?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,15 +85,12 @@ export default function AdminWallets() {
   const [assetNetworks, setAssetNetworks] = useState<{ id: string; assetSymbol: string; chainSlug: string; chainName: string }[]>([]);
   const [newWalletAssetNetworkId, setNewWalletAssetNetworkId] = useState("");
 
-  const coins = useMemo(() => [...new Set(wallets.map(w => w.coin))], [wallets]);
-
   const filtered = useMemo(() => wallets.filter(w => {
     const matchSearch = w.userName.toLowerCase().includes(search.toLowerCase()) ||
       w.address.toLowerCase().includes(search.toLowerCase()) ||
       w.userId.toLowerCase().includes(search.toLowerCase());
-    const matchCoin = coinFilter === "all" || w.coin === coinFilter;
-    return matchSearch && matchCoin;
-  }), [wallets, search, coinFilter]);
+    return matchSearch;
+  }), [wallets, search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +101,7 @@ export default function AdminWallets() {
       fetch(`${API_BASE}/admin/wallets`, { headers: getAuthHeaders() }).then(async (res) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
-        return data as { wallets: AdminWallet[] };
+        return data as { wallets: AdminWalletApiRow[] };
       }),
       fetch(`${API_BASE}/admin/users?limit=200`, { headers: getAuthHeaders() }).then(async (res) => {
         const data = await res.json().catch(() => ({}));
@@ -63,7 +116,7 @@ export default function AdminWallets() {
     ])
       .then(([w, u, an]) => {
         if (cancelled) return;
-        setWallets(w.wallets ?? []);
+        setWallets(aggregateWalletsByNetwork(w.wallets ?? []));
         setUsers(u.users ?? []);
         setAssetNetworks(an.assetNetworks ?? []);
       })
@@ -81,20 +134,6 @@ export default function AdminWallets() {
     };
   }, []);
 
-  type WalletStatus = "active" | "frozen" | "pending";
-  type AdminWallet = {
-    id: string;
-    userId: string;
-    userName: string;
-    coin: string;
-    network?: string;
-    balance: number;
-    frozen: number;
-    address: string;
-    status: WalletStatus;
-    createdAt: string;
-  };
-
   const toggleFreeze = async (id: string) => {
     const w = wallets.find((x) => x.id === id);
     if (!w) return;
@@ -108,8 +147,10 @@ export default function AdminWallets() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
-      const updated = (data as { wallet?: AdminWallet }).wallet;
-      if (updated) setWallets((prev) => prev.map((x) => (x.id === id ? updated : x)));
+      const fresh = await fetch(`${API_BASE}/admin/wallets`, { headers: getAuthHeaders() });
+      const freshData = await fresh.json().catch(() => ({}));
+      if (!fresh.ok) throw new Error((freshData as { error?: string }).error ?? fresh.statusText);
+      setWallets(aggregateWalletsByNetwork((freshData as { wallets?: AdminWalletApiRow[] }).wallets ?? []));
     } catch (e: unknown) {
       setWallets((prev) => prev.map((x) => (x.id === id ? w : x)));
       setError(e instanceof Error ? e.message : "Failed to update wallet");
@@ -128,8 +169,10 @@ export default function AdminWallets() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error((data as { error?: string }).error ?? res.statusText);
-      const wallet = (data as { wallet?: AdminWallet }).wallet;
-      if (wallet) setWallets((prev) => [wallet, ...prev]);
+      const fresh = await fetch(`${API_BASE}/admin/wallets`, { headers: getAuthHeaders() });
+      const freshData = await fresh.json().catch(() => ({}));
+      if (!fresh.ok) throw new Error((freshData as { error?: string }).error ?? fresh.statusText);
+      setWallets(aggregateWalletsByNetwork((freshData as { wallets?: AdminWalletApiRow[] }).wallets ?? []));
       setCreateOpen(false);
       setNewWalletUser("");
       setNewWalletCoin("");
@@ -156,17 +199,14 @@ export default function AdminWallets() {
     setNewWalletAssetNetworkId(first?.id ?? "");
   }, [newWalletCoin, createNetworks]);
 
-  const totalBalance = wallets.reduce((sum, w) => {
-    const prices: Record<string, number> = { BTC: 97245, ETH: 3412, USDT: 1, SOL: 198, XRP: 2.41, BNB: 612, ADA: 0.98, DOGE: 0.34, AVAX: 42, LINK: 18.3 };
-    return sum + w.balance * (prices[w.coin] || 1);
-  }, 0);
+  const networkCount = useMemo(() => new Set(wallets.map((w) => w.network)).size, [wallets]);
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">Wallet Management</h1>
-          <p className="text-sm text-muted-foreground">{wallets.length} wallets · ${(totalBalance / 1e6).toFixed(1)}M total value</p>
+          <p className="text-sm text-muted-foreground">{wallets.length} wallet networks</p>
         </div>
         <Button size="sm" className="gap-1.5 self-start" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5" /> Create Wallet
@@ -190,8 +230,8 @@ export default function AdminWallets() {
           <p className="text-xs text-muted-foreground">Frozen</p>
         </CardContent></Card>
         <Card><CardContent className="p-4 text-center">
-          <p className="text-2xl font-bold font-mono">{coins.length}</p>
-          <p className="text-xs text-muted-foreground">Coins</p>
+          <p className="text-2xl font-bold font-mono">{networkCount}</p>
+          <p className="text-xs text-muted-foreground">Networks</p>
         </CardContent></Card>
       </div>
 
@@ -202,13 +242,6 @@ export default function AdminWallets() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Search by user, address or ID..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <Select value={coinFilter} onValueChange={setCoinFilter}>
-            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Coins</SelectItem>
-              {coins.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
         </CardContent>
       </Card>
 
@@ -222,8 +255,7 @@ export default function AdminWallets() {
             <TableHeader>
               <TableRow>
                 <TableHead>User</TableHead>
-                <TableHead>Coin</TableHead>
-                <TableHead className="hidden md:table-cell">Network</TableHead>
+                <TableHead>Network</TableHead>
                 <TableHead>Balance</TableHead>
                 <TableHead className="hidden md:table-cell">Frozen</TableHead>
                 <TableHead className="hidden md:table-cell">Address</TableHead>
@@ -238,9 +270,8 @@ export default function AdminWallets() {
                     <p className="text-sm font-medium">{w.userName}</p>
                     <p className="text-xs text-muted-foreground">{w.userId}</p>
                   </TableCell>
-                  <TableCell><Badge variant="outline">{w.coin}</Badge></TableCell>
-                  <TableCell className="hidden md:table-cell">{w.network ?? "—"}</TableCell>
-                  <TableCell className="font-mono text-sm">{w.balance.toFixed(w.coin === "BTC" ? 4 : w.coin === "ETH" ? 3 : 2)}</TableCell>
+                  <TableCell><Badge variant="outline">{w.network}</Badge></TableCell>
+                  <TableCell className="font-mono text-sm">{w.balance.toFixed(4)}</TableCell>
                   <TableCell className="hidden md:table-cell font-mono text-sm text-sell">{w.frozen > 0 ? w.frozen.toFixed(2) : "—"}</TableCell>
                   <TableCell className="hidden md:table-cell">
                     <div className="flex items-center gap-1.5">

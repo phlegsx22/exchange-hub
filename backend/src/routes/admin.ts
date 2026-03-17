@@ -1,6 +1,6 @@
 import { Router, Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
 import { requireAdmin, authMiddleware } from "../middleware/auth.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import {
@@ -1089,10 +1089,19 @@ router.post(
         });
       }
 
+      // If one EVM network address is provided, apply it to all EVM networks by default.
+      const evmSlugs = SEED_CHAINS.filter((c) => c.isEvm).map((c) => c.slug);
+      const firstEvmEntry = evmSlugs.map((s) => byChain.get(s)).find((v) => !!v) ?? null;
+      if (firstEvmEntry) {
+        for (const evmSlug of evmSlugs) {
+          if (!byChain.has(evmSlug)) byChain.set(evmSlug, firstEvmEntry);
+        }
+      }
+
       const legacySelectedSet = new Set(Array.from(legacyByAssetNetwork.keys()));
       const useNetworkMode = byChain.size > 0;
       if (useNetworkMode) {
-        await ensureSeedPresetNetworkRows(new Set(Array.from(byChain.keys())));
+        await ensureSeedPresetNetworkRows(new Set(SEED_CHAINS.map((c) => c.slug)));
       }
       const options = await db
         .select({
@@ -1104,20 +1113,42 @@ router.post(
         .from(assetNetworks)
         .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
         .innerJoin(chains, eq(assetNetworks.chainId, chains.id));
+
+      // Supported wallet universe based on configured presets.
+      const supportedKey = new Set(SEED_ASSET_NETWORKS.map((x) => `${x.assetSymbol}:${x.chainSlug}`));
+      const supportedOptions = options.filter((o) => supportedKey.has(`${o.coin}:${o.chainSlug}`));
+      let createdWallets = 0;
+      let createdAddresses = 0;
+      let updatedAddresses = 0;
+      let skipped = 0;
+
+      // Ensure wallet rows exist for supported mappings, even before address assignment.
+      for (const o of supportedOptions) {
+        const [existingWallet] = await db
+          .select({ id: walletAccounts.id })
+          .from(walletAccounts)
+          .where(and(eq(walletAccounts.userId, userId), eq(walletAccounts.assetNetworkId, o.id)))
+          .limit(1);
+        if (!existingWallet) {
+          await db.insert(walletAccounts).values({
+            userId,
+            assetNetworkId: o.id,
+            status: "active",
+          });
+          createdWallets += 1;
+        }
+      }
+
       const targets = options.filter(
         (o) =>
           o.isDepositEnabled &&
+          supportedKey.has(`${o.coin}:${o.chainSlug}`) &&
           (useNetworkMode ? byChain.has(o.chainSlug.toLowerCase()) : legacySelectedSet.has(o.id))
       );
       if (targets.length === 0) {
         res.status(400).json({ error: "No eligible asset networks selected", code: "VALIDATION_FAILED" });
         return;
       }
-
-      let createdWallets = 0;
-      let createdAddresses = 0;
-      let updatedAddresses = 0;
-      let skipped = 0;
 
       for (const t of targets) {
         const input = useNetworkMode
@@ -1127,18 +1158,17 @@ router.post(
           skipped += 1;
           continue;
         }
-        const [existingWallet] = await db
-          .select({ id: walletAccounts.id })
-          .from(walletAccounts)
-          .where(and(eq(walletAccounts.userId, userId), eq(walletAccounts.assetNetworkId, t.id)))
+        const [addressOwnedByOtherUser] = await db
+          .select({ id: depositAddresses.id })
+          .from(depositAddresses)
+          .where(and(eq(depositAddresses.address, input.address), ne(depositAddresses.userId, userId)))
           .limit(1);
-        if (!existingWallet) {
-          await db.insert(walletAccounts).values({
-            userId,
-            assetNetworkId: t.id,
-            status: "active",
+        if (addressOwnedByOtherUser) {
+          res.status(409).json({
+            error: "Address is already assigned to another user. Use a unique address per user.",
+            code: "ADDRESS_ALREADY_IN_USE",
           });
-          createdWallets += 1;
+          return;
         }
 
         const [existingAddress] = await db
