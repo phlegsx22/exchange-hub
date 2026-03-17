@@ -70,6 +70,7 @@ type SeedAssetNetwork = {
 };
 
 const SEED_CHAINS: SeedChain[] = [
+  { slug: "bitcoin", name: "Bitcoin", chainId: null, nativeSymbol: "BTC", isEvm: false },
   { slug: "ethereum", name: "Ethereum", chainId: 1, nativeSymbol: "ETH", isEvm: true },
   { slug: "tron", name: "Tron", chainId: null, nativeSymbol: "TRX", isEvm: false },
   { slug: "bsc", name: "BNB Smart Chain", chainId: 56, nativeSymbol: "BNB", isEvm: true },
@@ -79,6 +80,9 @@ const SEED_CHAINS: SeedChain[] = [
 ];
 
 const SEED_ASSETS: SeedAsset[] = [
+  { symbol: "BTC", name: "Bitcoin", decimals: 8, isNative: true },
+  { symbol: "ARB", name: "Arbitrum", decimals: 18, isNative: false },
+  { symbol: "TRX", name: "TRON", decimals: 6, isNative: true },
   { symbol: "SOL", name: "Solana", decimals: 9, isNative: true },
   { symbol: "ETH", name: "Ethereum", decimals: 18, isNative: true },
   { symbol: "BNB", name: "BNB", decimals: 18, isNative: true },
@@ -88,12 +92,16 @@ const SEED_ASSETS: SeedAsset[] = [
 
 // NOTE: Contract addresses are commonly-known defaults; verify before production.
 const SEED_ASSET_NETWORKS: SeedAssetNetwork[] = [
+  // BTC on Bitcoin
+  { assetSymbol: "BTC", chainSlug: "bitcoin", contractAddress: null },
+
   // ETH on Ethereum/Base/Arbitrum
   { assetSymbol: "ETH", chainSlug: "ethereum", contractAddress: null },
   { assetSymbol: "ETH", chainSlug: "base", contractAddress: null },
   { assetSymbol: "ETH", chainSlug: "arbitrum", contractAddress: null },
+  { assetSymbol: "ARB", chainSlug: "arbitrum", contractAddress: "0x912CE59144191C1204E64559FE8253a0e49E6548" },
 
-  // USDT + USDC on Ethereum/Base/Arbitrum/BSC/Solana
+  // USDT + USDC on Ethereum/Base/Arbitrum/BSC/Solana/Tron
   { assetSymbol: "USDT", chainSlug: "ethereum", contractAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }, // ERC20
   { assetSymbol: "USDC", chainSlug: "ethereum", contractAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
   { assetSymbol: "USDT", chainSlug: "base", contractAddress: null },
@@ -105,9 +113,12 @@ const SEED_ASSET_NETWORKS: SeedAssetNetwork[] = [
   // Solana mint addresses can be filled later if needed.
   { assetSymbol: "USDT", chainSlug: "solana", contractAddress: null },
   { assetSymbol: "USDC", chainSlug: "solana", contractAddress: null },
-
-  // USDT on Tron
   { assetSymbol: "USDT", chainSlug: "tron", contractAddress: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" },
+  { assetSymbol: "USDC", chainSlug: "tron", contractAddress: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8" },
+
+  // TRX on Tron + Ethereum
+  { assetSymbol: "TRX", chainSlug: "tron", contractAddress: null },
+  { assetSymbol: "TRX", chainSlug: "ethereum", contractAddress: "0x50327c6c5a14dcade707abad2e27eb517df87ab5" },
 
   // SOL on Solana + BNB on BSC
   { assetSymbol: "SOL", chainSlug: "solana", contractAddress: null },
