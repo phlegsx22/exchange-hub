@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import type { Server } from "node:http";
 import authRoutes from "./routes/auth.js";
 import kycRoutes from "./routes/kyc.js";
 import adminRoutes from "./routes/admin.js";
@@ -59,15 +60,39 @@ app.get("/health", (_req, res) => {
 
 let stopPriceFeed: (() => void) | null = null;
 let stopDepositPoller: (() => void) | null = null;
+let server: Server | null = null;
+let shuttingDown = false;
 
 function shutdown(): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
   stopDepositPoller?.();
   stopPriceFeed?.();
+  stopDepositPoller = null;
+  stopPriceFeed = null;
+
+  const forceExitMs = Number(process.env.SHUTDOWN_FORCE_EXIT_MS ?? 8000);
+  const timeoutMs = Number.isFinite(forceExitMs) && forceExitMs > 0 ? forceExitMs : 8000;
+  const forceTimer = setTimeout(() => {
+    console.error(`[shutdown] forcing process exit after ${timeoutMs}ms`);
+    process.exit(0);
+  }, timeoutMs);
+
+  if (!server) {
+    clearTimeout(forceTimer);
+    process.exit(0);
+    return;
+  }
+
+  server.close(() => {
+    clearTimeout(forceTimer);
+    process.exit(0);
+  });
 }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-app.listen(PORT, () => {
+server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   // Start background services asynchronously after HTTP server is up.
   setTimeout(() => {

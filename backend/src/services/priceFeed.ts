@@ -9,6 +9,7 @@ type PriceRow = {
 const prices = new Map<string, PriceRow>();
 let ws: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
+let stopped = false;
 
 const DEFAULT_FEED_SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ARBUSDT", "USDTUSDT", "USDCUSDT"];
 const FEED_SYMBOLS = (process.env.PRICE_FEED_SYMBOLS ?? DEFAULT_FEED_SYMBOLS.join(","))
@@ -39,6 +40,7 @@ function setStableFallbacks(now: number): void {
 }
 
 function connect(): void {
+  if (stopped) return;
   ws = new WebSocket(BINANCE_WS_URL);
 
   ws.on("open", () => {
@@ -72,6 +74,7 @@ function connect(): void {
   });
 
   ws.on("close", () => {
+    if (stopped) return;
     console.warn("[price-feed] disconnected, reconnecting...");
     ws = null;
     if (reconnectTimer) clearTimeout(reconnectTimer);
@@ -80,9 +83,11 @@ function connect(): void {
 }
 
 export function startPriceFeed(): () => void {
+  stopped = false;
   // Defer websocket bootstrap so API startup path stays fast/non-blocking.
   setTimeout(connect, 0);
   return () => {
+    stopped = true;
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = null;
     ws?.close();
