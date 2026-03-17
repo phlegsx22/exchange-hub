@@ -132,6 +132,80 @@ const DEFAULT_CHAIN_BY_SYMBOL: Record<string, { chainSlug: string; chainName: st
   DOGE: { chainSlug: "dogecoin", chainName: "Dogecoin", nativeSymbol: "DOGE", isEvm: false },
 };
 
+async function ensureSeedPresetNetworkRows(chainSlugs: Set<string>): Promise<void> {
+  const normalized = new Set(Array.from(chainSlugs).map((s) => s.trim().toLowerCase()));
+  const selectedChains = SEED_CHAINS.filter((c) => normalized.has(c.slug));
+  const selectedMappings = SEED_ASSET_NETWORKS.filter((m) => normalized.has(m.chainSlug));
+  const selectedAssetSymbols = new Set(selectedMappings.map((m) => m.assetSymbol));
+  const selectedAssets = SEED_ASSETS.filter((a) => selectedAssetSymbols.has(a.symbol));
+
+  for (const c of selectedChains) {
+    const existing = await db
+      .select({ id: chains.id })
+      .from(chains)
+      .where(eq(chains.slug, c.slug))
+      .limit(1)
+      .then((r) => r[0]);
+    if (!existing) {
+      await db.insert(chains).values({
+        slug: c.slug,
+        name: c.name,
+        chainId: c.chainId,
+        nativeSymbol: c.nativeSymbol,
+        isEvm: c.isEvm,
+        isMainnet: true,
+      });
+    }
+  }
+
+  for (const a of selectedAssets) {
+    const existing = await db
+      .select({ id: assets.id })
+      .from(assets)
+      .where(eq(assets.symbol, a.symbol))
+      .limit(1)
+      .then((r) => r[0]);
+    if (!existing) {
+      await db.insert(assets).values({
+        symbol: a.symbol,
+        name: a.name,
+        decimals: a.decimals,
+        isNative: a.isNative,
+      });
+    }
+  }
+
+  for (const row of selectedMappings) {
+    const chain = await db
+      .select({ id: chains.id })
+      .from(chains)
+      .where(eq(chains.slug, row.chainSlug))
+      .limit(1)
+      .then((r) => r[0]);
+    const asset = await db
+      .select({ id: assets.id })
+      .from(assets)
+      .where(eq(assets.symbol, row.assetSymbol))
+      .limit(1)
+      .then((r) => r[0]);
+    if (!chain || !asset) continue;
+
+    const existing = await db
+      .select({ id: assetNetworks.id })
+      .from(assetNetworks)
+      .where(and(eq(assetNetworks.assetId, asset.id), eq(assetNetworks.chainId, chain.id)))
+      .limit(1)
+      .then((r) => r[0]);
+    if (!existing) {
+      await db.insert(assetNetworks).values({
+        assetId: asset.id,
+        chainId: chain.id,
+        contractAddress: row.contractAddress ?? null,
+      });
+    }
+  }
+}
+
 function toAdminUserRow(u: {
   id: string;
   email: string;
@@ -1015,6 +1089,11 @@ router.post(
         });
       }
 
+      const legacySelectedSet = new Set(Array.from(legacyByAssetNetwork.keys()));
+      const useNetworkMode = byChain.size > 0;
+      if (useNetworkMode) {
+        await ensureSeedPresetNetworkRows(new Set(Array.from(byChain.keys())));
+      }
       const options = await db
         .select({
           id: assetNetworks.id,
@@ -1025,9 +1104,6 @@ router.post(
         .from(assetNetworks)
         .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
         .innerJoin(chains, eq(assetNetworks.chainId, chains.id));
-
-      const legacySelectedSet = new Set(Array.from(legacyByAssetNetwork.keys()));
-      const useNetworkMode = byChain.size > 0;
       const targets = options.filter(
         (o) =>
           o.isDepositEnabled &&

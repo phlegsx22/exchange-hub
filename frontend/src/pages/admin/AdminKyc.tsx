@@ -139,12 +139,11 @@ export default function AdminKyc() {
     setSeedAddressInputs({});
     try {
       const [res, existing] = await Promise.all([
-        api.adminAssetNetworks(),
+        api.adminSeedOptions(),
         api.adminUserDepositAddresses(selected.userId),
       ]);
-      const enabled = (res.assetNetworks ?? []).filter((n) => n.isDepositEnabled);
       const networks = Array.from(
-        enabled.reduce((acc, n) => {
+        (res.options ?? []).reduce((acc, n) => {
           acc.set(n.chainSlug.toLowerCase(), { chainSlug: n.chainSlug, chainName: n.chainName });
           return acc;
         }, new Map<string, SeedNetwork>())

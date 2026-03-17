@@ -167,12 +167,11 @@ export default function AdminUsers() {
     setError(null);
     try {
       const [networks, existing] = await Promise.all([
-        api.adminAssetNetworks(),
+        api.adminSeedOptions(),
         api.adminUserDepositAddresses(user.id),
       ]);
-      const enabled = (networks.assetNetworks ?? []).filter((n) => n.isDepositEnabled);
       const uniqueNetworks = Array.from(
-        enabled.reduce((acc, n) => {
+        (networks.options ?? []).reduce((acc, n) => {
           acc.set(n.chainSlug.toLowerCase(), { chainSlug: n.chainSlug, chainName: n.chainName });
           return acc;
         }, new Map<string, { chainSlug: string; chainName: string }>())
