@@ -3,26 +3,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { api, type SupportedAssetNetwork, type UserDepositAddress } from "@/lib/api";
+import { api, type UserDepositAddress } from "@/lib/api";
 import { Copy } from "lucide-react";
 
 export default function Deposit() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [networks, setNetworks] = useState<SupportedAssetNetwork[]>([]);
+  const [addresses, setAddresses] = useState<UserDepositAddress[]>([]);
 
   const [asset, setAsset] = useState<string>("");
   const [assetNetworkId, setAssetNetworkId] = useState<string>("");
-  const [addresses, setAddresses] = useState<UserDepositAddress[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([api.supportedNetworks(), api.userDepositAddresses()])
-      .then(([r, d]) => {
+    api.userDepositAddresses()
+      .then((d) => {
         if (cancelled) return;
-        setNetworks(r.assetNetworks ?? []);
         setAddresses(d.addresses ?? []);
       })
       .catch((e: unknown) => {
@@ -40,34 +38,32 @@ export default function Deposit() {
 
   const assets = useMemo(() => {
     return Array.from(
-      new Set(networks.filter((n) => n.isDepositEnabled).map((n) => n.assetSymbol))
+      new Set(addresses.map((a) => a.assetSymbol))
     ).sort();
-  }, [networks]);
+  }, [addresses]);
 
   useEffect(() => {
     if (!asset && assets.length) setAsset(assets[0]);
   }, [asset, assets]);
 
   const assetNetworks = useMemo(() => {
-    return networks
-      .filter((n) => n.assetSymbol === asset)
-      .filter((n) => n.isDepositEnabled);
-  }, [networks, asset]);
+    return addresses.filter((a) => a.assetSymbol === asset);
+  }, [addresses, asset]);
 
   useEffect(() => {
     // pick first network when asset changes
     const first = assetNetworks[0];
-    setAssetNetworkId(first?.id ?? "");
+    setAssetNetworkId(first?.assetNetworkId ?? "");
   }, [asset, assetNetworks]);
 
-  const selected = assetNetworks.find((n) => n.id === assetNetworkId) ?? null;
+  const selected = assetNetworks.find((n) => n.assetNetworkId === assetNetworkId) ?? null;
   const selectedAddress = addresses.find((a) => a.assetNetworkId === assetNetworkId) ?? null;
 
   return (
     <div className="container py-8 space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Deposit</h1>
-        <p className="text-sm text-muted-foreground">Select an asset and network to view your assigned deposit address.</p>
+        <p className="text-sm text-muted-foreground">Only admin-seeded token networks are shown here.</p>
       </div>
 
       {error && (
@@ -103,7 +99,7 @@ export default function Deposit() {
                 </SelectTrigger>
                 <SelectContent>
                   {assetNetworks.map((n) => (
-                    <SelectItem key={n.id} value={n.id}>
+                    <SelectItem key={n.assetNetworkId} value={n.assetNetworkId}>
                       {n.chainName} ({n.chainSlug})
                     </SelectItem>
                   ))}
