@@ -62,6 +62,7 @@ export type RecentActivityItem = {
   assetSymbol: string;
   chainSlug: string;
   chainName: string;
+  receiptNo?: string | null;
   description: string | null;
   createdAt: string; // ISO string
 };
@@ -403,7 +404,7 @@ export const api = {
     }
     return handleResponse<{
       ok: true;
-      withdrawal: { id?: string; status: string; createdAt: string | Date };
+      withdrawal: { id?: string; receiptNo?: string; status: string; createdAt: string | Date };
     }>(res);
   },
 

@@ -2,7 +2,7 @@ import { Router, Response } from "express";
 import { z } from "zod";
 import type { AuthRequest } from "../middleware/auth.js";
 import { authMiddleware, requireAccountActive, requireVerified } from "../middleware/auth.js";
-import { db, ledgerEntries, assetNetworks, assets, chains } from "../db/index.js";
+import { db, ledgerEntries, assetNetworks, assets, chains, deposits, withdrawals } from "../db/index.js";
 import { desc, eq } from "drizzle-orm";
 
 const router = Router();
@@ -44,11 +44,15 @@ router.get(
           assetSymbol: assets.symbol,
           chainSlug: chains.slug,
           chainName: chains.name,
+          receiptNoDeposit: deposits.receiptNo,
+          receiptNoWithdrawal: withdrawals.receiptNo,
         })
         .from(ledgerEntries)
         .innerJoin(assetNetworks, eq(ledgerEntries.assetNetworkId, assetNetworks.id))
         .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
         .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
+        .leftJoin(deposits, eq(ledgerEntries.refId, deposits.id))
+        .leftJoin(withdrawals, eq(ledgerEntries.refId, withdrawals.id))
         .where(eq(ledgerEntries.userId, req.user.id))
         .orderBy(desc(ledgerEntries.createdAt))
         .limit(limit);
@@ -69,6 +73,7 @@ router.get(
             assetSymbol: r.assetSymbol,
             chainSlug: r.chainSlug,
             chainName: r.chainName,
+            receiptNo: r.receiptNoDeposit ?? r.receiptNoWithdrawal ?? null,
             description: r.description,
             createdAt,
           };

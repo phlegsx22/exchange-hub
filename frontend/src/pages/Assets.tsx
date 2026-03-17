@@ -4,13 +4,14 @@ import {
   Search, Eye, EyeOff, ArrowUpRight, ArrowDownRight, TrendingUp,
   Wallet, Send, ArrowLeftRight, PieChart, ShieldCheck, Clock, Zap
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
-import { DEFAULT_WATCHLIST, TOKENS } from "@/lib/tokens";
+import { TOKENS } from "@/lib/tokens";
 import { useBinanceTickers } from "@/hooks/useBinanceTickers";
 import { useUserBalances } from "@/hooks/useUserBalances";
 import { TokenIcon } from "@/components/TokenIcon";
+import { api } from "@/lib/api";
 
 const portfolioChart = Array.from({ length: 30 }, (_, i) => ({
   day: i,
@@ -21,22 +22,43 @@ export default function Assets() {
   const [search, setSearch] = useState("");
   const [hideSmall, setHideSmall] = useState(false);
   const [showBalances, setShowBalances] = useState(true);
-  const { balances, portfolio } = useUserBalances(DEFAULT_WATCHLIST);
-  const tickers = useBinanceTickers(DEFAULT_WATCHLIST);
+  const [supportedSymbols, setSupportedSymbols] = useState<string[]>([]);
+  const [supportedLoading, setSupportedLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await api.supportedNetworks();
+        const symbols = Array.from(new Set((r.assetNetworks ?? []).map((n) => n.assetSymbol))).sort();
+        setSupportedSymbols(symbols);
+      } catch {
+        setSupportedSymbols(["BTC", "ETH", "USDT", "USDC", "BNB", "SOL", "TRX", "ARB"]);
+      } finally {
+        setSupportedLoading(false);
+      }
+    })();
+  }, []);
+
+  const { balances, portfolio } = useUserBalances(supportedSymbols);
+  const tickerSymbols = useMemo(
+    () => supportedSymbols.filter((s): s is keyof typeof TOKENS => s in TOKENS),
+    [supportedSymbols]
+  );
+  const tickers = useBinanceTickers(tickerSymbols);
   const portfolioItemBySymbol = useMemo(
     () => new Map((portfolio?.items ?? []).map((item) => [item.symbol, item])),
     [portfolio]
   );
 
   const rows = useMemo(() => {
-    const base = DEFAULT_WATCHLIST.map((symbol) => {
-      const meta = TOKENS[symbol];
+    const base = supportedSymbols.map((symbol) => {
+      const meta = TOKENS[symbol as keyof typeof TOKENS] ?? { name: symbol, fixedUsdPrice: 0 };
       const total = balances[symbol] ?? 0;
       const available = total; // until we have open orders
       const inOrder = 0;
       const backendPrice = portfolioItemBySymbol.get(symbol)?.priceUsd ?? null;
-      const price = backendPrice ?? tickers[symbol]?.priceUsd ?? meta.fixedUsdPrice ?? 0;
-      const changePct = tickers[symbol]?.change24hPct ?? 0;
+      const price = backendPrice ?? tickers[symbol as keyof typeof tickers]?.priceUsd ?? meta.fixedUsdPrice ?? 0;
+      const changePct = tickers[symbol as keyof typeof tickers]?.change24hPct ?? 0;
       const backendValue = portfolioItemBySymbol.get(symbol)?.valueUsd ?? null;
       const value = backendValue ?? total * price;
       return {
@@ -52,10 +74,10 @@ export default function Assets() {
     });
     const totalValue = base.reduce((sum, r) => sum + r.value, 0);
     return { base, totalValue };
-  }, [balances, portfolioItemBySymbol, tickers]);
+  }, [balances, portfolioItemBySymbol, supportedSymbols, tickers]);
 
   const totalValue = portfolio?.totalValueUsd ?? rows.totalValue;
-  const btcPrice = tickers.BTC?.priceUsd ?? TOKENS.BTC.fixedUsdPrice ?? 0;
+  const btcPrice = tickers.BTC?.priceUsd ?? TOKENS.BTC?.fixedUsdPrice ?? 0;
   const btcEquivalent = btcPrice > 0 ? totalValue / btcPrice : 0;
 
   const filtered = rows.base.filter((a) =>
@@ -181,13 +203,13 @@ export default function Assets() {
             {filtered.map((a) => (
               <tr key={a.symbol} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                 <td className="py-4 px-4">
-                  <div className="flex items-center gap-2">
-                    <TokenIcon symbol={a.symbol} size={32} />
+                  <Link to={`/assets/${a.symbol}`} className="flex items-center gap-2">
+                    <TokenIcon symbol={a.symbol as keyof typeof TOKENS} size={32} />
                     <div>
                       <p className="font-semibold text-sm">{a.symbol}</p>
                       <p className="text-xs text-muted-foreground">{a.name}</p>
                     </div>
-                  </div>
+                  </Link>
                 </td>
                 <td className="py-4 px-4 text-right font-mono text-sm hidden md:table-cell">{showBalances ? a.total.toFixed(a.symbol === "BTC" ? 6 : 4) : "****"}</td>
                 <td className="py-4 px-4 text-right font-mono text-sm hidden sm:table-cell">{showBalances ? a.available.toFixed(a.symbol === "BTC" ? 6 : 4) : "****"}</td>
@@ -219,6 +241,7 @@ export default function Assets() {
         </div>
         <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> Updated just now</div>
       </div>
+      {supportedLoading && <p className="text-xs text-muted-foreground">Loading supported assets...</p>}
     </div>
   );
 }

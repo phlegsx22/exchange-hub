@@ -607,6 +607,7 @@ router.get(
       const depositEvents = await db
         .select({
           id: deposits.id,
+          receiptNo: deposits.receiptNo,
           status: deposits.status,
           amount: deposits.amount,
           createdAt: deposits.createdAt,
@@ -621,6 +622,7 @@ router.get(
       const withdrawalEvents = await db
         .select({
           id: withdrawals.id,
+          receiptNo: withdrawals.receiptNo,
           status: withdrawals.status,
           amount: withdrawals.amount,
           createdAt: withdrawals.createdAt,
@@ -659,7 +661,7 @@ router.get(
           action: `Deposit ${e.status}`,
           actor: "system",
           target: `${e.userName} (${e.userEmail})`,
-          details: `Amount: ${String(e.amount)}`,
+          details: `Amount: ${String(e.amount)} | Receipt: ${e.receiptNo}`,
           severity:
             e.status === "failed" ? ("critical" as const) : e.status === "pending" ? ("warning" as const) : ("info" as const),
           ip: "—",
@@ -670,7 +672,7 @@ router.get(
           action: `Withdrawal ${e.status}`,
           actor: "system",
           target: `${e.userName} (${e.userEmail})`,
-          details: `Amount: ${String(e.amount)}`,
+          details: `Amount: ${String(e.amount)} | Receipt: ${e.receiptNo}`,
           severity:
             e.status === "failed" ? ("critical" as const) : e.status === "pending" || e.status === "processing" ? ("warning" as const) : ("info" as const),
           ip: "—",

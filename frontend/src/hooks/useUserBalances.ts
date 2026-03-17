@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_BASE, getAuthHeaders } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { DEFAULT_WATCHLIST, type TokenSymbol } from "@/lib/tokens";
+import { DEFAULT_WATCHLIST } from "@/lib/tokens";
 
-export type Balances = Record<TokenSymbol, number>;
+export type Balances = Record<string, number>;
 export type PortfolioItem = {
   symbol: string;
   balance: number;
@@ -19,7 +19,7 @@ export type PortfolioSummary = {
   updatedAt: string;
 };
 
-function zeroBalances(symbols: TokenSymbol[]): Balances {
+function zeroBalances(symbols: string[]): Balances {
   return symbols.reduce((acc, s) => {
     acc[s] = 0;
     return acc;
@@ -32,7 +32,7 @@ function zeroBalances(symbols: TokenSymbol[]): Balances {
  *
  * Later: replace this with a backend endpoint (e.g. GET /wallets) and keep this hook as the UI adapter.
  */
-export function useUserBalances(symbols: TokenSymbol[] = DEFAULT_WATCHLIST) {
+export function useUserBalances(symbols: string[] = DEFAULT_WATCHLIST) {
   const { user, accessToken } = useAuth();
   const userId = user?.id;
 

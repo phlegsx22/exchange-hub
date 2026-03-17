@@ -18,6 +18,7 @@ type AddressRow = {
   assetSymbol: string;
   chainSlug: string;
   contractAddress: string | null;
+  assetIsNative: boolean;
   decimals: number;
   isDepositEnabled: boolean;
 };
@@ -31,6 +32,17 @@ const TRON_PRO_API_KEY = process.env.TRON_PRO_API_KEY ?? "";
 const providers = new Map<string, JsonRpcProvider>();
 let timer: NodeJS.Timeout | null = null;
 let running = false;
+
+function makeReceiptNo(prefix: "DPT"): string {
+  return `${prefix}-${randomHex(16)}`;
+}
+
+function randomHex(len: number): string {
+  const chars = "0123456789ABCDEF";
+  let out = "";
+  for (let i = 0; i < len; i += 1) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
 
 function getRpcUrl(chainSlug: string): string | null {
   switch (chainSlug) {
@@ -121,6 +133,12 @@ async function getTronBalanceAtomic(row: AddressRow): Promise<bigint> {
 }
 
 async function getOnchainBalanceAtomic(row: AddressRow): Promise<bigint | null> {
+  // Safety: do NOT treat native chain balance as token balance.
+  // If an asset is non-native, it must have a contract address for polling.
+  if (!row.assetIsNative && !row.contractAddress) {
+    return null;
+  }
+
   if (row.chainSlug === "bitcoin") {
     return getBitcoinBalanceAtomic(row.address);
   }
@@ -194,6 +212,7 @@ async function creditDelta(row: AddressRow, deltaAtomic: bigint, onchainAtomic: 
         confirmations: 1,
         status: "completed",
         externalId,
+        receiptNo: makeReceiptNo("DPT"),
       })
       .returning({ id: deposits.id });
 
@@ -241,6 +260,7 @@ async function pollOnce(): Promise<void> {
         assetSymbol: assets.symbol,
         chainSlug: chains.slug,
         contractAddress: assetNetworks.contractAddress,
+        assetIsNative: assets.isNative,
         decimals: assets.decimals,
         isDepositEnabled: assetNetworks.isDepositEnabled,
       })

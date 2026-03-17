@@ -282,12 +282,14 @@ export const deposits = pgTable(
     confirmations: smallint("confirmations").notNull().default(0),
     status: depositStatusEnum("status").notNull().default("pending"),
     externalId: varchar("external_id", { length: 128 }).notNull(),
+    receiptNo: varchar("receipt_no", { length: 32 }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("deposit_external_unique").on(t.assetNetworkId, t.externalId),
     uniqueIndex("deposit_tx_unique").on(t.assetNetworkId, t.txHash),
+    uniqueIndex("deposit_receipt_unique").on(t.receiptNo),
     index("deposit_user_idx").on(t.userId),
   ]
 );
@@ -308,11 +310,13 @@ export const withdrawals = pgTable(
     txHash: varchar("tx_hash", { length: 128 }),
     status: withdrawalStatusEnum("status").notNull().default("pending"),
     idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+    receiptNo: varchar("receipt_no", { length: 32 }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     uniqueIndex("withdraw_idempotency_unique").on(t.userId, t.idempotencyKey),
+    uniqueIndex("withdraw_receipt_unique").on(t.receiptNo),
     index("withdraw_user_idx").on(t.userId),
   ]
 );

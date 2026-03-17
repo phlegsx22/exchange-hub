@@ -13,6 +13,7 @@ import VerifyEmail from "./pages/VerifyEmail";
 import KYC from "./pages/KYC";
 import Dashboard from "./pages/Dashboard";
 import Assets from "./pages/Assets";
+import AssetDetails from "./pages/AssetDetails";
 import Deposit from "./pages/Deposit";
 import Withdraw from "./pages/Withdraw";
 import Transfer from "./pages/Transfer";
@@ -135,6 +136,14 @@ const App = () => (
                 element={
                   <RequireVerified>
                     <Assets />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/assets/:symbol"
+                element={
+                  <RequireVerified>
+                    <AssetDetails />
                   </RequireVerified>
                 }
               />

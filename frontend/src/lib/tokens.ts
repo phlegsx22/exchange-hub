@@ -1,5 +1,8 @@
 export type TokenSymbol =
   | "BTC"
+  | "USDC"
+  | "TRX"
+  | "ARB"
   | "ETH"
   | "SOL"
   | "USDT"
@@ -32,6 +35,27 @@ export const TOKENS: Record<TokenSymbol, TokenMeta> = {
     binanceUsdtPair: "btcusdt",
     iconUrl:
       "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/bitcoin/info/logo.png",
+  },
+  USDC: {
+    symbol: "USDC",
+    name: "USD Coin",
+    fixedUsdPrice: 1,
+    iconUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
+  },
+  TRX: {
+    symbol: "TRX",
+    name: "TRON",
+    binanceUsdtPair: "trxusdt",
+    iconUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png",
+  },
+  ARB: {
+    symbol: "ARB",
+    name: "Arbitrum",
+    binanceUsdtPair: "arbusdt",
+    iconUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/assets/0x912CE59144191C1204E64559FE8253a0e49E6548/logo.png",
   },
   ETH: {
     symbol: "ETH",

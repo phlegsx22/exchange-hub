@@ -14,6 +14,11 @@ import { sendAdminNotificationEmail } from "../lib/email.js";
 
 const router = Router();
 
+function makeReceiptNo(prefix: "WDL"): string {
+  const raw = randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase();
+  return `${prefix}-${raw}`;
+}
+
 router.get("/supported", authMiddleware, requireVerified, requireAccountActive, async (_req: AuthRequest, res: Response) => {
   try {
     const rows = await db
@@ -221,9 +226,11 @@ router.post(
           toAddress,
           status: "pending",
           idempotencyKey,
+          receiptNo: makeReceiptNo("WDL"),
         })
         .returning({
           id: withdrawals.id,
+          receiptNo: withdrawals.receiptNo,
           status: withdrawals.status,
           createdAt: withdrawals.createdAt,
         });
@@ -238,6 +245,7 @@ router.post(
           `Network: ${an.chainSlug}`,
           `Amount: ${amount}`,
           `To address: ${toAddress}`,
+          `Receipt No: ${row?.receiptNo ?? "—"}`,
           `Withdrawal ID: ${row?.id ?? "—"}`,
         ],
       });
@@ -246,6 +254,7 @@ router.post(
         ok: true,
         withdrawal: {
           id: row?.id,
+          receiptNo: row?.receiptNo,
           status: row?.status ?? "pending",
           createdAt: row?.createdAt ?? new Date(),
         },
