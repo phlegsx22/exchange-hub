@@ -20,7 +20,7 @@ import { Search, ShieldCheck, Loader2, CheckCircle2, XCircle, FileCheck2, Wallet
 import { api } from "@/lib/api";
 
 type KycSubmission = Awaited<ReturnType<typeof api.adminKycSubmissions>>["submissions"][number];
-type AssetNetwork = Awaited<ReturnType<typeof api.adminAssetNetworks>>["assetNetworks"][number];
+type SeedNetwork = { chainSlug: string; chainName: string };
 
 const statusColor: Record<string, string> = {
   pending: "bg-warning/10 text-warning border-warning/20",
@@ -43,7 +43,7 @@ export default function AdminKyc() {
   const [reviewing, setReviewing] = useState(false);
 
   const [seedOpen, setSeedOpen] = useState(false);
-  const [assetNetworks, setAssetNetworks] = useState<AssetNetwork[]>([]);
+  const [seedNetworks, setSeedNetworks] = useState<SeedNetwork[]>([]);
   const [selectedNetworks, setSelectedNetworks] = useState<Set<string>>(new Set());
   const [seedAddressInputs, setSeedAddressInputs] = useState<Record<string, { address: string; memo: string }>>({});
   const [loadingNetworks, setLoadingNetworks] = useState(false);
@@ -143,16 +143,23 @@ export default function AdminKyc() {
         api.adminUserDepositAddresses(selected.userId),
       ]);
       const enabled = (res.assetNetworks ?? []).filter((n) => n.isDepositEnabled);
-      setAssetNetworks(enabled);
-      const byId = new Map(
-        (existing.addresses ?? []).map((a) => [
-          a.assetNetworkId,
-          { address: a.address ?? "", memo: a.memo ?? "" },
+      const networks = Array.from(
+        enabled.reduce((acc, n) => {
+          acc.set(n.chainSlug.toLowerCase(), { chainSlug: n.chainSlug, chainName: n.chainName });
+          return acc;
+        }, new Map<string, SeedNetwork>())
+      ).map(([, v]) => v);
+      setSeedNetworks(networks);
+
+      const byChain = new Map(
+        (existing.networks ?? []).map((n) => [
+          n.chainSlug.toLowerCase(),
+          { address: n.address ?? "", memo: n.memo ?? "" },
         ])
       );
       const nextInputs: Record<string, { address: string; memo: string }> = {};
-      for (const n of enabled) {
-        nextInputs[n.id] = byId.get(n.id) ?? { address: "", memo: "" };
+      for (const n of networks) {
+        nextInputs[n.chainSlug.toLowerCase()] = byChain.get(n.chainSlug.toLowerCase()) ?? { address: "", memo: "" };
       }
       setSeedAddressInputs(nextInputs);
     } catch (e: unknown) {
@@ -163,11 +170,11 @@ export default function AdminKyc() {
     }
   }
 
-  function toggleNetwork(id: string) {
+  function toggleNetwork(chainSlug: string) {
     setSelectedNetworks((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(chainSlug)) next.delete(chainSlug);
+      else next.add(chainSlug);
       return next;
     });
   }
@@ -178,10 +185,10 @@ export default function AdminKyc() {
     setError(null);
     try {
       const entries = Array.from(selectedNetworks)
-        .map((id) => {
-          const input = seedAddressInputs[id];
+        .map((chainSlug) => {
+          const input = seedAddressInputs[chainSlug];
           return {
-            assetNetworkId: id,
+            chainSlug,
             address: input?.address?.trim() ?? "",
             memo: input?.memo?.trim() || null,
           };
@@ -194,7 +201,7 @@ export default function AdminKyc() {
 
       await api.adminSeedUserDepositAddresses(
         selected.userId,
-        entries
+        { networkEntries: entries }
       );
       setSeedOpen(false);
     } catch (e: unknown) {
@@ -398,37 +405,40 @@ export default function AdminKyc() {
             </div>
           ) : (
             <div className="space-y-2 max-h-[420px] overflow-y-auto border rounded-md p-2">
-              {assetNetworks.map((n) => (
-                <div key={n.id} className="px-2 py-2 rounded hover:bg-muted/50">
+              {seedNetworks.map((n) => (
+                <div key={n.chainSlug} className="px-2 py-2 rounded hover:bg-muted/50">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <Checkbox checked={selectedNetworks.has(n.id)} onCheckedChange={() => toggleNetwork(n.id)} />
-                    <span className="font-medium">{n.assetSymbol}</span>
-                    <span className="text-muted-foreground text-sm">{n.chainName}</span>
+                    <Checkbox
+                      checked={selectedNetworks.has(n.chainSlug.toLowerCase())}
+                      onCheckedChange={() => toggleNetwork(n.chainSlug.toLowerCase())}
+                    />
+                    <span className="font-medium">{n.chainName}</span>
+                    <span className="text-muted-foreground text-sm">({n.chainSlug})</span>
                   </label>
-                  {selectedNetworks.has(n.id) && (
+                  {selectedNetworks.has(n.chainSlug.toLowerCase()) && (
                     <div className="mt-2 grid gap-2 sm:grid-cols-4">
                       <Input
                         className="sm:col-span-3"
                         placeholder="Paste deposit address"
-                        value={seedAddressInputs[n.id]?.address ?? ""}
+                        value={seedAddressInputs[n.chainSlug.toLowerCase()]?.address ?? ""}
                         onChange={(e) =>
                           setSeedAddressInputs((prev) => ({
                             ...prev,
-                            [n.id]: {
+                            [n.chainSlug.toLowerCase()]: {
                               address: e.target.value,
-                              memo: prev[n.id]?.memo ?? "",
+                              memo: prev[n.chainSlug.toLowerCase()]?.memo ?? "",
                             },
                           }))
                         }
                       />
                       <Input
                         placeholder="Memo (optional)"
-                        value={seedAddressInputs[n.id]?.memo ?? ""}
+                        value={seedAddressInputs[n.chainSlug.toLowerCase()]?.memo ?? ""}
                         onChange={(e) =>
                           setSeedAddressInputs((prev) => ({
                             ...prev,
-                            [n.id]: {
-                              address: prev[n.id]?.address ?? "",
+                            [n.chainSlug.toLowerCase()]: {
+                              address: prev[n.chainSlug.toLowerCase()]?.address ?? "",
                               memo: e.target.value,
                             },
                           }))

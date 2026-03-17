@@ -72,7 +72,7 @@ export default function AdminUsers() {
   const [rejectReason, setRejectReason] = useState("");
   const [seedPromptUser, setSeedPromptUser] = useState<AdminUser | null>(null);
   const [seedManualUser, setSeedManualUser] = useState<AdminUser | null>(null);
-  const [seedAssetNetworks, setSeedAssetNetworks] = useState<Array<{ id: string; assetSymbol: string; chainName: string }>>([]);
+  const [seedNetworks, setSeedNetworks] = useState<Array<{ chainSlug: string; chainName: string }>>([]);
   const [seedSelectedNetworks, setSeedSelectedNetworks] = useState<Set<string>>(new Set());
   const [seedAddressInputs, setSeedAddressInputs] = useState<Record<string, { address: string; memo: string }>>({});
   const [loadingSeedNetworks, setLoadingSeedNetworks] = useState(false);
@@ -170,18 +170,24 @@ export default function AdminUsers() {
         api.adminAssetNetworks(),
         api.adminUserDepositAddresses(user.id),
       ]);
-      const enabled = (networks.assetNetworks ?? [])
-        .filter((n) => n.isDepositEnabled)
-        .map((n) => ({ id: n.id, assetSymbol: n.assetSymbol, chainName: n.chainName }));
-      setSeedAssetNetworks(enabled);
-      const byId = new Map(
-        (existing.addresses ?? []).map((a) => [
-          a.assetNetworkId,
+      const enabled = (networks.assetNetworks ?? []).filter((n) => n.isDepositEnabled);
+      const uniqueNetworks = Array.from(
+        enabled.reduce((acc, n) => {
+          acc.set(n.chainSlug.toLowerCase(), { chainSlug: n.chainSlug, chainName: n.chainName });
+          return acc;
+        }, new Map<string, { chainSlug: string; chainName: string }>())
+      ).map(([, v]) => v);
+      setSeedNetworks(uniqueNetworks);
+      const byChain = new Map(
+        (existing.networks ?? []).map((a) => [
+          a.chainSlug.toLowerCase(),
           { address: a.address ?? "", memo: a.memo ?? "" },
         ])
       );
       const inputs: Record<string, { address: string; memo: string }> = {};
-      for (const n of enabled) inputs[n.id] = byId.get(n.id) ?? { address: "", memo: "" };
+      for (const n of uniqueNetworks) {
+        inputs[n.chainSlug.toLowerCase()] = byChain.get(n.chainSlug.toLowerCase()) ?? { address: "", memo: "" };
+      }
       setSeedAddressInputs(inputs);
       setSeedSelectedNetworks(new Set());
     } catch (err: unknown) {
@@ -195,10 +201,10 @@ export default function AdminUsers() {
   async function saveManualSeedAddresses() {
     if (!seedManualUser) return;
     const entries = Array.from(seedSelectedNetworks)
-      .map((id) => {
-        const input = seedAddressInputs[id];
+      .map((chainSlug) => {
+        const input = seedAddressInputs[chainSlug];
         return {
-          assetNetworkId: id,
+          chainSlug,
           address: input?.address?.trim() ?? "",
           memo: input?.memo?.trim() || null,
         };
@@ -213,7 +219,7 @@ export default function AdminUsers() {
     setSeedingUserId(seedManualUser.id);
     setError(null);
     try {
-      await api.adminSeedUserDepositAddresses(seedManualUser.id, entries);
+      await api.adminSeedUserDepositAddresses(seedManualUser.id, { networkEntries: entries });
       setSeedManualUser(null);
       await loadUsers();
     } catch (err: unknown) {
@@ -643,48 +649,48 @@ export default function AdminUsers() {
             <div className="p-4 text-sm text-muted-foreground">Loading networks...</div>
           ) : (
             <div className="max-h-[420px] overflow-y-auto space-y-2 border rounded-md p-2">
-              {seedAssetNetworks.map((n) => (
-                <div key={n.id} className="px-2 py-2 rounded hover:bg-muted/50">
+              {seedNetworks.map((n) => (
+                <div key={n.chainSlug} className="px-2 py-2 rounded hover:bg-muted/50">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={seedSelectedNetworks.has(n.id)}
+                      checked={seedSelectedNetworks.has(n.chainSlug.toLowerCase())}
                       onChange={(e) =>
                         setSeedSelectedNetworks((prev) => {
                           const next = new Set(prev);
-                          if (e.target.checked) next.add(n.id);
-                          else next.delete(n.id);
+                          if (e.target.checked) next.add(n.chainSlug.toLowerCase());
+                          else next.delete(n.chainSlug.toLowerCase());
                           return next;
                         })
                       }
                     />
-                    <span className="font-medium">{n.assetSymbol}</span>
-                    <span className="text-sm text-muted-foreground">{n.chainName}</span>
+                    <span className="font-medium">{n.chainName}</span>
+                    <span className="text-sm text-muted-foreground">({n.chainSlug})</span>
                   </label>
-                  {seedSelectedNetworks.has(n.id) && (
+                  {seedSelectedNetworks.has(n.chainSlug.toLowerCase()) && (
                     <div className="mt-2 grid gap-2 sm:grid-cols-4">
                       <Input
                         className="sm:col-span-3"
                         placeholder="Paste deposit address"
-                        value={seedAddressInputs[n.id]?.address ?? ""}
+                        value={seedAddressInputs[n.chainSlug.toLowerCase()]?.address ?? ""}
                         onChange={(e) =>
                           setSeedAddressInputs((prev) => ({
                             ...prev,
-                            [n.id]: {
+                            [n.chainSlug.toLowerCase()]: {
                               address: e.target.value,
-                              memo: prev[n.id]?.memo ?? "",
+                              memo: prev[n.chainSlug.toLowerCase()]?.memo ?? "",
                             },
                           }))
                         }
                       />
                       <Input
                         placeholder="Memo (optional)"
-                        value={seedAddressInputs[n.id]?.memo ?? ""}
+                        value={seedAddressInputs[n.chainSlug.toLowerCase()]?.memo ?? ""}
                         onChange={(e) =>
                           setSeedAddressInputs((prev) => ({
                             ...prev,
-                            [n.id]: {
-                              address: prev[n.id]?.address ?? "",
+                            [n.chainSlug.toLowerCase()]: {
+                              address: prev[n.chainSlug.toLowerCase()]?.address ?? "",
                               memo: e.target.value,
                             },
                           }))

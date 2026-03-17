@@ -34,7 +34,18 @@ const seedUserAddressesSchema = z.object({
         memo: z.string().trim().max(64).optional().nullable(),
       })
     )
-    .min(1),
+    .optional(),
+  networkEntries: z
+    .array(
+      z.object({
+        chainSlug: z.string().trim().min(2).max(64),
+        address: z.string().trim().min(3).max(128),
+        memo: z.string().trim().max(64).optional().nullable(),
+      })
+    )
+    .optional(),
+}).refine((v) => (v.entries?.length ?? 0) > 0 || (v.networkEntries?.length ?? 0) > 0, {
+  message: "At least one entry is required",
 });
 
 type SeedChain = {
@@ -59,48 +70,48 @@ type SeedAssetNetwork = {
 };
 
 const SEED_CHAINS: SeedChain[] = [
-  { slug: "bitcoin", name: "Bitcoin", chainId: null, nativeSymbol: "BTC", isEvm: false },
   { slug: "ethereum", name: "Ethereum", chainId: 1, nativeSymbol: "ETH", isEvm: true },
   { slug: "tron", name: "Tron", chainId: null, nativeSymbol: "TRX", isEvm: false },
   { slug: "bsc", name: "BNB Smart Chain", chainId: 56, nativeSymbol: "BNB", isEvm: true },
   { slug: "base", name: "Base", chainId: 8453, nativeSymbol: "ETH", isEvm: true },
   { slug: "arbitrum", name: "Arbitrum One", chainId: 42161, nativeSymbol: "ETH", isEvm: true },
+  { slug: "solana", name: "Solana", chainId: null, nativeSymbol: "SOL", isEvm: false },
 ];
 
 const SEED_ASSETS: SeedAsset[] = [
-  { symbol: "BTC", name: "Bitcoin", decimals: 8, isNative: true },
+  { symbol: "SOL", name: "Solana", decimals: 9, isNative: true },
   { symbol: "ETH", name: "Ethereum", decimals: 18, isNative: true },
   { symbol: "BNB", name: "BNB", decimals: 18, isNative: true },
   { symbol: "USDT", name: "Tether USD", decimals: 6, isNative: false },
   { symbol: "USDC", name: "USD Coin", decimals: 6, isNative: false },
-  { symbol: "ARB", name: "Arbitrum", decimals: 18, isNative: false },
 ];
 
 // NOTE: Contract addresses are commonly-known defaults; verify before production.
 const SEED_ASSET_NETWORKS: SeedAssetNetwork[] = [
-  { assetSymbol: "BTC", chainSlug: "bitcoin", contractAddress: null },
-  // Ethereum native + stables
+  // ETH on Ethereum/Base/Arbitrum
   { assetSymbol: "ETH", chainSlug: "ethereum", contractAddress: null },
+  { assetSymbol: "ETH", chainSlug: "base", contractAddress: null },
+  { assetSymbol: "ETH", chainSlug: "arbitrum", contractAddress: null },
+
+  // USDT + USDC on Ethereum/Base/Arbitrum/BSC/Solana
   { assetSymbol: "USDT", chainSlug: "ethereum", contractAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }, // ERC20
   { assetSymbol: "USDC", chainSlug: "ethereum", contractAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
-
-  // Tron
-  { assetSymbol: "USDT", chainSlug: "tron", contractAddress: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" }, // TRC20
-
-  // BSC native + stables
-  { assetSymbol: "BNB", chainSlug: "bsc", contractAddress: null },
-  { assetSymbol: "USDT", chainSlug: "bsc", contractAddress: "0x55d398326f99059ff775485246999027b3197955" }, // BEP20
-  { assetSymbol: "USDC", chainSlug: "bsc", contractAddress: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d" }, // USDC on BSC
-
-  // Base (ETH native + USDC)
-  { assetSymbol: "ETH", chainSlug: "base", contractAddress: null },
+  { assetSymbol: "USDT", chainSlug: "base", contractAddress: null },
   { assetSymbol: "USDC", chainSlug: "base", contractAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
-
-  // Arbitrum (ETH native + USDT/USDC/ARB)
-  { assetSymbol: "ETH", chainSlug: "arbitrum", contractAddress: null },
   { assetSymbol: "USDT", chainSlug: "arbitrum", contractAddress: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9" },
-  { assetSymbol: "USDC", chainSlug: "arbitrum", contractAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" }, // USDC (native) on Arbitrum
-  { assetSymbol: "ARB", chainSlug: "arbitrum", contractAddress: "0x912CE59144191C1204E64559FE8253a0e49E6548" },
+  { assetSymbol: "USDC", chainSlug: "arbitrum", contractAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" },
+  { assetSymbol: "USDT", chainSlug: "bsc", contractAddress: "0x55d398326f99059ff775485246999027b3197955" }, // BEP20
+  { assetSymbol: "USDC", chainSlug: "bsc", contractAddress: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d" },
+  // Solana mint addresses can be filled later if needed.
+  { assetSymbol: "USDT", chainSlug: "solana", contractAddress: null },
+  { assetSymbol: "USDC", chainSlug: "solana", contractAddress: null },
+
+  // USDT on Tron
+  { assetSymbol: "USDT", chainSlug: "tron", contractAddress: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" },
+
+  // SOL on Solana + BNB on BSC
+  { assetSymbol: "SOL", chainSlug: "solana", contractAddress: null },
+  { assetSymbol: "BNB", chainSlug: "bsc", contractAddress: null },
 ];
 
 const DEFAULT_CHAIN_BY_SYMBOL: Record<string, { chainSlug: string; chainName: string; nativeSymbol: string; isEvm: boolean; chainId?: number; contractAddress?: string | null }> = {
@@ -986,16 +997,24 @@ router.post(
         return;
       }
 
-      const inputEntries = parsed.data.entries;
-      const deduped = new Map<string, { assetNetworkId: string; address: string; memo: string | null }>();
-      for (const entry of inputEntries) {
-        deduped.set(entry.assetNetworkId, {
-          assetNetworkId: entry.assetNetworkId,
+      const legacyEntries = parsed.data.entries ?? [];
+      const networkEntries = parsed.data.networkEntries ?? [];
+      const legacyByAssetNetwork = new Map<string, { address: string; memo: string | null }>();
+      const byChain = new Map<string, { address: string; memo: string | null }>();
+
+      for (const entry of legacyEntries) {
+        legacyByAssetNetwork.set(entry.assetNetworkId, {
           address: entry.address.trim(),
           memo: entry.memo?.trim() || null,
         });
       }
-      const selectedSet = new Set(Array.from(deduped.keys()));
+      for (const entry of networkEntries) {
+        byChain.set(entry.chainSlug.trim().toLowerCase(), {
+          address: entry.address.trim(),
+          memo: entry.memo?.trim() || null,
+        });
+      }
+
       const options = await db
         .select({
           id: assetNetworks.id,
@@ -1007,7 +1026,13 @@ router.post(
         .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
         .innerJoin(chains, eq(assetNetworks.chainId, chains.id));
 
-      const targets = options.filter((o) => o.isDepositEnabled && selectedSet.has(o.id));
+      const legacySelectedSet = new Set(Array.from(legacyByAssetNetwork.keys()));
+      const useNetworkMode = byChain.size > 0;
+      const targets = options.filter(
+        (o) =>
+          o.isDepositEnabled &&
+          (useNetworkMode ? byChain.has(o.chainSlug.toLowerCase()) : legacySelectedSet.has(o.id))
+      );
       if (targets.length === 0) {
         res.status(400).json({ error: "No eligible asset networks selected", code: "VALIDATION_FAILED" });
         return;
@@ -1019,7 +1044,9 @@ router.post(
       let skipped = 0;
 
       for (const t of targets) {
-        const input = deduped.get(t.id);
+        const input = useNetworkMode
+          ? byChain.get(t.chainSlug.toLowerCase())
+          : legacyByAssetNetwork.get(t.id);
         if (!input) {
           skipped += 1;
           continue;
@@ -1131,6 +1158,24 @@ router.get(
           address: r.address ?? null,
           memo: r.memo ?? null,
         })),
+        networks: Array.from(
+          rows.reduce((acc, r) => {
+            const key = r.chainSlug.toLowerCase();
+            const current = acc.get(key);
+            if (!current) {
+              acc.set(key, {
+                chainSlug: r.chainSlug,
+                chainName: r.chainName,
+                address: r.address ?? null,
+                memo: r.memo ?? null,
+              });
+              return acc;
+            }
+            if (!current.address && r.address) current.address = r.address;
+            if (!current.memo && r.memo) current.memo = r.memo;
+            return acc;
+          }, new Map<string, { chainSlug: string; chainName: string; address: string | null; memo: string | null }>())
+        ).map(([, v]) => v),
       });
     } catch (err) {
       console.error("Admin user deposit addresses failed:", err);

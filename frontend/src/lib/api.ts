@@ -590,14 +590,17 @@ export const api = {
 
   async adminSeedUserDepositAddresses(
     userId: string,
-    entries: Array<{ assetNetworkId: string; address: string; memo?: string | null }>
+    payload: {
+      entries?: Array<{ assetNetworkId: string; address: string; memo?: string | null }>;
+      networkEntries?: Array<{ chainSlug: string; address: string; memo?: string | null }>;
+    }
   ) {
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/seed-deposit-addresses`, {
         method: "POST",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ entries }),
+        body: JSON.stringify(payload),
       });
     } catch {
       throw new Error(NETWORK_ERROR_MESSAGE);
@@ -627,6 +630,12 @@ export const api = {
       addresses: Array<{
         assetNetworkId: string;
         assetSymbol: string;
+        chainSlug: string;
+        chainName: string;
+        address: string | null;
+        memo: string | null;
+      }>;
+      networks: Array<{
         chainSlug: string;
         chainName: string;
         address: string | null;
