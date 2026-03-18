@@ -110,9 +110,9 @@ const SEED_ASSET_NETWORKS: SeedAssetNetwork[] = [
   { assetSymbol: "USDC", chainSlug: "arbitrum", contractAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" },
   { assetSymbol: "USDT", chainSlug: "bsc", contractAddress: "0x55d398326f99059ff775485246999027b3197955" }, // BEP20
   { assetSymbol: "USDC", chainSlug: "bsc", contractAddress: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d" },
-  // Solana mint addresses can be filled later if needed.
-  { assetSymbol: "USDT", chainSlug: "solana", contractAddress: null },
-  { assetSymbol: "USDC", chainSlug: "solana", contractAddress: null },
+  // Solana SPL mints
+  { assetSymbol: "USDT", chainSlug: "solana", contractAddress: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" },
+  { assetSymbol: "USDC", chainSlug: "solana", contractAddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" },
   { assetSymbol: "USDT", chainSlug: "tron", contractAddress: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" },
   { assetSymbol: "USDC", chainSlug: "tron", contractAddress: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8" },
 

@@ -31,6 +31,10 @@ const DEFAULT_POLL_MS = Number(process.env.CHAIN_POLL_INTERVAL_MS ?? 60000);
 const BTC_API_BASE = process.env.BTC_API_BASE ?? "https://blockstream.info/api";
 const TRON_GRID_API_BASE = process.env.TRON_GRID_API_BASE ?? "https://api.trongrid.io";
 const TRON_PRO_API_KEY = process.env.TRON_PRO_API_KEY ?? "";
+const SOLANA_RPC_URLS = (process.env.SOLANA_RPC_URLS ?? "https://api.mainnet-beta.solana.com")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const CONTRACT_FALLBACKS: Record<string, string> = {
   "USDT:ethereum": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
   "USDC:ethereum": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
@@ -44,6 +48,8 @@ const CONTRACT_FALLBACKS: Record<string, string> = {
   "TRX:ethereum": "0x50327c6c5a14dcade707abad2e27eb517df87ab5",
   "USDT:tron": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
   "USDC:tron": "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
+  "USDT:solana": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+  "USDC:solana": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 };
 
 const providers = new Map<string, JsonRpcProvider>();
@@ -150,6 +156,90 @@ async function getTronBalanceAtomic(row: AddressRow): Promise<bigint> {
   return 0n;
 }
 
+type SolanaRpcResponse<T> = {
+  jsonrpc?: string;
+  result?: T;
+  error?: { code?: number; message?: string };
+};
+
+async function callSolanaRpc<T>(method: string, params: unknown[]): Promise<T> {
+  if (SOLANA_RPC_URLS.length === 0) {
+    throw new Error("No Solana RPC URL configured");
+  }
+  let lastErr: string | null = null;
+  for (const url of SOLANA_RPC_URLS) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: Date.now(),
+          method,
+          params,
+        }),
+      });
+      if (!res.ok) {
+        lastErr = `HTTP ${res.status} at ${url}`;
+        continue;
+      }
+      const data = (await res.json()) as SolanaRpcResponse<T>;
+      if (data.error) {
+        lastErr = `${data.error.code ?? "RPC"} ${data.error.message ?? "Unknown error"} at ${url}`;
+        continue;
+      }
+      if (typeof data.result === "undefined") {
+        lastErr = `Missing result for ${method} at ${url}`;
+        continue;
+      }
+      return data.result;
+    } catch (err) {
+      lastErr = err instanceof Error ? `${err.message} at ${url}` : `Unknown error at ${url}`;
+    }
+  }
+  throw new Error(`Solana RPC failed for ${method}: ${lastErr ?? "unknown failure"}`);
+}
+
+async function getSolanaBalanceAtomic(row: AddressRow, contractAddress: string | null): Promise<{ balanceAtomic: bigint; decimals: number }> {
+  // Native SOL in lamports.
+  if (!contractAddress) {
+    const result = await callSolanaRpc<{ value?: number }>("getBalance", [row.address, { commitment: "confirmed" }]);
+    const lamports = BigInt(Math.max(0, Number(result.value ?? 0)));
+    return { balanceAtomic: lamports, decimals: row.decimals };
+  }
+
+  // SPL token by mint across all owner token accounts.
+  const result = await callSolanaRpc<{
+    value?: Array<{
+      account?: {
+        data?: {
+          parsed?: {
+            info?: { tokenAmount?: { amount?: string; decimals?: number } };
+          };
+        };
+      };
+    }>;
+  }>("getTokenAccountsByOwner", [row.address, { mint: contractAddress }, { encoding: "jsonParsed" }]);
+
+  let totalAtomic = 0n;
+  let detectedDecimals: number | null = null;
+  for (const entry of result.value ?? []) {
+    const tokenAmount = entry.account?.data?.parsed?.info?.tokenAmount;
+    if (!tokenAmount) continue;
+    const amountRaw = tokenAmount.amount ?? "0";
+    const decimals = Number(tokenAmount.decimals ?? row.decimals);
+    if (detectedDecimals == null && Number.isFinite(decimals) && decimals >= 0 && decimals <= 36) {
+      detectedDecimals = decimals;
+    }
+    try {
+      totalAtomic += BigInt(amountRaw);
+    } catch {
+      // ignore malformed token-account amount
+    }
+  }
+  return { balanceAtomic: totalAtomic, decimals: detectedDecimals ?? row.decimals };
+}
+
 async function getTokenDecimals(row: AddressRow, provider: JsonRpcProvider): Promise<number> {
   if (!row.contractAddress) return row.decimals;
   const key = `${row.chainSlug}:${row.contractAddress.toLowerCase()}`;
@@ -190,6 +280,9 @@ async function getOnchainBalanceAtomic(row: AddressRow): Promise<{ balanceAtomic
   if (row.chainSlug === "tron") {
     const b = await getTronBalanceAtomic(row);
     return { balanceAtomic: b, decimals: row.decimals };
+  }
+  if (row.chainSlug === "solana") {
+    return getSolanaBalanceAtomic(row, contractAddress);
   }
 
   // Free-RPC MVP currently supports EVM chains directly.
