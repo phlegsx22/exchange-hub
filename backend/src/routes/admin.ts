@@ -1102,15 +1102,6 @@ router.post(
         });
       }
 
-      // If one EVM network address is provided, apply it to all EVM networks by default.
-      const evmSlugs = SEED_CHAINS.filter((c) => c.isEvm).map((c) => c.slug);
-      const firstEvmEntry = evmSlugs.map((s) => byChain.get(s)).find((v) => !!v) ?? null;
-      if (firstEvmEntry) {
-        for (const evmSlug of evmSlugs) {
-          if (!byChain.has(evmSlug)) byChain.set(evmSlug, firstEvmEntry);
-        }
-      }
-
       const legacySelectedSet = new Set(Array.from(legacyByAssetNetwork.keys()));
       const useNetworkMode = byChain.size > 0;
       if (useNetworkMode) {
