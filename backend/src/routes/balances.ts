@@ -1,8 +1,8 @@
 import { Router, Response } from "express";
 import { authMiddleware, requireAccountActive, requireVerified } from "../middleware/auth.js";
 import type { AuthRequest } from "../middleware/auth.js";
-import { db, assets, assetNetworks, ledgerEntries } from "../db/index.js";
-import { eq, sql } from "drizzle-orm";
+import { db, assets, assetNetworks, depositAddresses, ledgerEntries } from "../db/index.js";
+import { and, eq, sql } from "drizzle-orm";
 import { getPriceAgeMs, getPriceUsd } from "../services/priceFeed.js";
 
 const router = Router();
@@ -26,6 +26,13 @@ router.get("/", authMiddleware, requireVerified, requireAccountActive, async (re
       .from(ledgerEntries)
       .innerJoin(assetNetworks, eq(ledgerEntries.assetNetworkId, assetNetworks.id))
       .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
+      .innerJoin(
+        depositAddresses,
+        and(
+          eq(depositAddresses.userId, ledgerEntries.userId),
+          eq(depositAddresses.assetNetworkId, ledgerEntries.assetNetworkId)
+        )
+      )
       .where(eq(ledgerEntries.userId, req.user.id))
       .groupBy(assets.symbol);
 

@@ -28,8 +28,8 @@ export default function Assets() {
   useEffect(() => {
     void (async () => {
       try {
-        const r = await api.supportedNetworks();
-        const symbols = Array.from(new Set((r.assetNetworks ?? []).map((n) => n.assetSymbol))).sort();
+        const r = await api.userDepositAddresses();
+        const symbols = Array.from(new Set((r.addresses ?? []).map((n) => n.assetSymbol))).sort();
         setSupportedSymbols(symbols);
       } catch {
         setSupportedSymbols(["BTC", "ETH", "USDT", "USDC", "BNB", "SOL", "TRX", "ARB"]);
