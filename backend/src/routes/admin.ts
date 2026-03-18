@@ -104,7 +104,7 @@ const SEED_ASSET_NETWORKS: SeedAssetNetwork[] = [
   // USDT + USDC on Ethereum/Base/Arbitrum/BSC/Solana/Tron
   { assetSymbol: "USDT", chainSlug: "ethereum", contractAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }, // ERC20
   { assetSymbol: "USDC", chainSlug: "ethereum", contractAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
-  { assetSymbol: "USDT", chainSlug: "base", contractAddress: null },
+  { assetSymbol: "USDT", chainSlug: "base", contractAddress: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2" },
   { assetSymbol: "USDC", chainSlug: "base", contractAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
   { assetSymbol: "USDT", chainSlug: "arbitrum", contractAddress: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9" },
   { assetSymbol: "USDC", chainSlug: "arbitrum", contractAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" },
@@ -202,7 +202,7 @@ async function ensureSeedPresetNetworkRows(chainSlugs: Set<string>): Promise<voi
     if (!chain || !asset) continue;
 
     const existing = await db
-      .select({ id: assetNetworks.id })
+      .select({ id: assetNetworks.id, contractAddress: assetNetworks.contractAddress })
       .from(assetNetworks)
       .where(and(eq(assetNetworks.assetId, asset.id), eq(assetNetworks.chainId, chain.id)))
       .limit(1)
@@ -213,6 +213,11 @@ async function ensureSeedPresetNetworkRows(chainSlugs: Set<string>): Promise<voi
         chainId: chain.id,
         contractAddress: row.contractAddress ?? null,
       });
+    } else if (row.contractAddress && !existing.contractAddress) {
+      await db
+        .update(assetNetworks)
+        .set({ contractAddress: row.contractAddress })
+        .where(eq(assetNetworks.id, existing.id));
     }
   }
 }
