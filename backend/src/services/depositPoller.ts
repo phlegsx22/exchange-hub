@@ -23,13 +23,17 @@ type AddressRow = {
   isDepositEnabled: boolean;
 };
 
-const ERC20_ABI = ["function balanceOf(address owner) view returns (uint256)"];
+const ERC20_ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+];
 const DEFAULT_POLL_MS = Number(process.env.CHAIN_POLL_INTERVAL_MS ?? 60000);
 const BTC_API_BASE = process.env.BTC_API_BASE ?? "https://blockstream.info/api";
 const TRON_GRID_API_BASE = process.env.TRON_GRID_API_BASE ?? "https://api.trongrid.io";
 const TRON_PRO_API_KEY = process.env.TRON_PRO_API_KEY ?? "";
 
 const providers = new Map<string, JsonRpcProvider>();
+const tokenDecimalsCache = new Map<string, number>();
 let timer: NodeJS.Timeout | null = null;
 let running = false;
 
@@ -132,7 +136,26 @@ async function getTronBalanceAtomic(row: AddressRow): Promise<bigint> {
   return 0n;
 }
 
-async function getOnchainBalanceAtomic(row: AddressRow): Promise<bigint | null> {
+async function getTokenDecimals(row: AddressRow, provider: JsonRpcProvider): Promise<number> {
+  if (!row.contractAddress) return row.decimals;
+  const key = `${row.chainSlug}:${row.contractAddress.toLowerCase()}`;
+  const cached = tokenDecimalsCache.get(key);
+  if (typeof cached === "number" && Number.isFinite(cached)) return cached;
+  try {
+    const token = new Contract(row.contractAddress, ERC20_ABI, provider);
+    const d = Number(await token.decimals());
+    if (Number.isFinite(d) && d >= 0 && d <= 36) {
+      tokenDecimalsCache.set(key, d);
+      return d;
+    }
+  } catch {
+    // fall back to configured asset decimals
+  }
+  tokenDecimalsCache.set(key, row.decimals);
+  return row.decimals;
+}
+
+async function getOnchainBalanceAtomic(row: AddressRow): Promise<{ balanceAtomic: bigint; decimals: number } | null> {
   // Safety: do NOT treat native chain balance as token balance.
   // If an asset is non-native, it must have a contract address for polling.
   if (!row.assetIsNative && !row.contractAddress) {
@@ -140,10 +163,12 @@ async function getOnchainBalanceAtomic(row: AddressRow): Promise<bigint | null> 
   }
 
   if (row.chainSlug === "bitcoin") {
-    return getBitcoinBalanceAtomic(row.address);
+    const b = await getBitcoinBalanceAtomic(row.address);
+    return { balanceAtomic: b, decimals: row.decimals };
   }
   if (row.chainSlug === "tron") {
-    return getTronBalanceAtomic(row);
+    const b = await getTronBalanceAtomic(row);
+    return { balanceAtomic: b, decimals: row.decimals };
   }
 
   // Free-RPC MVP currently supports EVM chains directly.
@@ -151,12 +176,14 @@ async function getOnchainBalanceAtomic(row: AddressRow): Promise<bigint | null> 
   if (!provider) return null;
 
   if (!row.contractAddress) {
-    return provider.getBalance(row.address);
+    const b = await provider.getBalance(row.address);
+    return { balanceAtomic: b, decimals: row.decimals };
   }
 
   const token = new Contract(row.contractAddress, ERC20_ABI, provider);
   const bal = (await token.balanceOf(row.address)) as bigint;
-  return bal;
+  const decimals = await getTokenDecimals(row, provider);
+  return { balanceAtomic: bal, decimals };
 }
 
 async function getCreditedAtomic(userId: string, assetNetworkId: string, decimals: number): Promise<bigint> {
@@ -190,15 +217,15 @@ async function getLedgerBalanceAtomic(userId: string, assetNetworkId: string, de
   }
 }
 
-async function creditDelta(row: AddressRow, deltaAtomic: bigint, onchainAtomic: bigint): Promise<void> {
+async function creditDelta(row: AddressRow, deltaAtomic: bigint, onchainAtomic: bigint, decimals: number): Promise<void> {
   if (deltaAtomic <= 0n) return;
-  const amount = formatUnits(deltaAtomic, row.decimals);
+  const amount = formatUnits(deltaAtomic, decimals);
   const externalId = `poll:${row.address}:${onchainAtomic.toString()}`;
   const txHash = `poll_${row.chainSlug}_${row.address}_${onchainAtomic.toString()}`.slice(0, 128);
 
   // ledger balance after credit
-  const ledgerAtomic = await getLedgerBalanceAtomic(row.userId, row.assetNetworkId, row.decimals);
-  const balanceAfter = formatUnits(ledgerAtomic + deltaAtomic, row.decimals);
+  const ledgerAtomic = await getLedgerBalanceAtomic(row.userId, row.assetNetworkId, decimals);
+  const balanceAfter = formatUnits(ledgerAtomic + deltaAtomic, decimals);
 
   try {
     const [dep] = await db
@@ -272,12 +299,12 @@ async function pollOnce(): Promise<void> {
     for (const row of rows) {
       if (!row.isDepositEnabled) continue;
       try {
-        const onchainAtomic = await getOnchainBalanceAtomic(row);
-        if (onchainAtomic == null) continue; // unsupported chain in free-RPC MVP
-        const creditedAtomic = await getCreditedAtomic(row.userId, row.assetNetworkId, row.decimals);
-        const delta = onchainAtomic - creditedAtomic;
+        const onchain = await getOnchainBalanceAtomic(row);
+        if (onchain == null) continue; // unsupported chain in free-RPC MVP
+        const creditedAtomic = await getCreditedAtomic(row.userId, row.assetNetworkId, onchain.decimals);
+        const delta = onchain.balanceAtomic - creditedAtomic;
         if (delta > 0n) {
-          await creditDelta(row, delta, onchainAtomic);
+          await creditDelta(row, delta, onchain.balanceAtomic, onchain.decimals);
         }
       } catch (err) {
         console.error(
