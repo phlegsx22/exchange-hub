@@ -8,6 +8,7 @@ import adminRoutes from "./routes/admin.js";
 import balancesRoutes from "./routes/balances.js";
 import walletsRoutes from "./routes/wallets.js";
 import activityRoutes from "./routes/activity.js";
+import tradeRoutes from "./routes/trade.js";
 import { startPriceFeed } from "./services/priceFeed.js";
 import { startDepositPoller } from "./services/depositPoller.js";
 
@@ -53,6 +54,7 @@ app.use("/admin", adminRoutes);
 app.use("/balances", balancesRoutes);
 app.use("/wallets", walletsRoutes);
 app.use("/activity", activityRoutes);
+app.use("/trade", tradeRoutes);
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "exchange-hub-api" });

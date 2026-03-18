@@ -14,6 +14,7 @@ import { useBinanceTickers } from "@/hooks/useBinanceTickers";
 import { useUserBalances } from "@/hooks/useUserBalances";
 import { useRecentActivity } from "@/hooks/useRecentActivity";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
 
 const portfolioChart = Array.from({ length: 30 }, (_, i) => ({
   day: i,
@@ -30,8 +31,16 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [showBalances, setShowBalances] = useState(true);
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [demoTradingBalances, setDemoTradingBalances] = useState<Record<string, number>>({});
+  const [demoLoading, setDemoLoading] = useState(false);
   const { balances } = useUserBalances(DEFAULT_WATCHLIST);
-  const tickers = useBinanceTickers(DEFAULT_WATCHLIST);
+  const tickerSymbols = useMemo(() => {
+    const known = Object.keys(demoTradingBalances)
+      .filter((s): s is keyof typeof TOKENS => s in TOKENS)
+      .filter((s) => (TOKENS[s].binanceUsdtPair || TOKENS[s].fixedUsdPrice != null));
+    return Array.from(new Set([...DEFAULT_WATCHLIST, ...known]));
+  }, [demoTradingBalances]);
+  const tickers = useBinanceTickers(tickerSymbols);
   const recent = useRecentActivity(10);
 
   function formatRelative(iso: string): string {
@@ -106,6 +115,13 @@ export default function Dashboard() {
   }, [balances, tickers]);
 
   const totalValue = holdings.totalValue;
+  const tradingValue = useMemo(() => {
+    return Object.entries(demoTradingBalances).reduce((sum, [symbol, bal]) => {
+      const price = tickers[symbol]?.priceUsd ?? TOKENS[symbol as keyof typeof TOKENS]?.fixedUsdPrice ?? 0;
+      return sum + (Number.isFinite(bal) ? bal : 0) * (Number.isFinite(price) ? price : 0);
+    }, 0);
+  }, [demoTradingBalances, tickers]);
+  const fundingAvailableEstimate = Math.max(totalValue - tradingValue, 0);
   const [onlineCount, setOnlineCount] = useState(48293);
   const isKycApproved = user?.kycStatus === "approved";
   const kycStatus = (user?.kycStatus ?? "none").replace("_", " ");
@@ -113,6 +129,27 @@ export default function Dashboard() {
   useEffect(() => {
     const t2 = setInterval(() => setOnlineCount(prev => prev + Math.floor((Math.random() - 0.45) * 30)), 5000);
     return () => { clearInterval(t2); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDemoLoading(true);
+    api
+      .demoTradePortfolio()
+      .then((r) => {
+        if (cancelled) return;
+        setDemoTradingBalances(r.balances ?? {});
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDemoTradingBalances({});
+      })
+      .finally(() => {
+        if (!cancelled) setDemoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -152,6 +189,28 @@ export default function Dashboard() {
             </Button>
           </Link>
           <Button variant="outline" size="sm" className="gap-1.5"><Bell className="h-3.5 w-3.5" /> Alerts</Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground">Funding Balance</p>
+          <p className="font-mono font-semibold">
+            {showBalances ? `$${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "****"}
+          </p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground">Trading Allocation</p>
+          <p className="font-mono font-semibold">
+            {showBalances ? `$${tradingValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "****"}
+          </p>
+          <p className="text-[10px] text-muted-foreground">{demoLoading ? "Loading..." : "Internal demo allocation"}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs text-muted-foreground">Funding Available (Est.)</p>
+          <p className="font-mono font-semibold">
+            {showBalances ? `$${fundingAvailableEstimate.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "****"}
+          </p>
         </div>
       </div>
 

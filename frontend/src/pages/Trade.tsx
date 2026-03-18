@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useBinanceOrderBook } from "@/hooks/useBinanceOrderBook";
-import { useUserBalances } from "@/hooks/useUserBalances";
-import { DEFAULT_WATCHLIST, TOKENS, type TokenSymbol } from "@/lib/tokens";
+import { TOKENS, type TokenSymbol } from "@/lib/tokens";
 import { useBinanceRecentTrades } from "@/hooks/useBinanceRecentTrades";
+import { api } from "@/lib/api";
 
 // Static order book removed — now using live Binance WebSocket data via useBinanceOrderBook hook
 
@@ -93,26 +92,76 @@ const TradingViewChart = ({ symbol = "BINANCE:BTCUSDT" }: { symbol?: string }) =
 
 export default function Trade() {
   const [side, setSide] = useState<"buy" | "sell">("buy");
-  const [orderType, setOrderType] = useState("limit");
-  const [price, setPrice] = useState("97,245.30");
   const [amount, setAmount] = useState("");
   const [selectedPair, setSelectedPair] = useState("BINANCE:BTCUSDT");
+  const [loadingPortfolio, setLoadingPortfolio] = useState(true);
+  const [minTradeUsd, setMinTradeUsd] = useState(10);
+  const [demoBalances, setDemoBalances] = useState<Record<string, number>>({});
+  const [myTrades, setMyTrades] = useState<Array<{ id: string; side: "buy" | "sell"; price: number; qty: number; time: string }>>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const orderBook = useBinanceOrderBook(selectedPair);
-  const { balances } = useUserBalances(DEFAULT_WATCHLIST);
   const marketTrades = useBinanceRecentTrades(selectedPair, 30);
-  const [myTrades, setMyTrades] = useState<{ side: "buy" | "sell"; price: number; qty: number; time: number }[]>([]);
 
   const baseAsset = selectedPair.replace("BINANCE:", "").replace("USDT", "");
   const quoteAsset = "USDT";
-  const availableQuote = balances.USDT ?? 0;
-  const availableBase = (balances as Record<string, number>)[baseAsset] ?? 0;
+  const availableQuote = demoBalances[quoteAsset] ?? 0;
+  const availableBase = demoBalances[baseAsset] ?? 0;
+  const lastPx = marketTrades[0]?.price ?? 0;
 
-  const handlePlaceOrder = () => {
-    const px = Number(price.replace(/,/g, ""));
+  async function refreshPortfolio(): Promise<void> {
+    setLoadingPortfolio(true);
+    try {
+      const r = await api.demoTradePortfolio();
+      setDemoBalances(r.balances ?? {});
+      setMinTradeUsd(r.minTradeNotionalUsd ?? 10);
+      setMyTrades(
+        (r.trades ?? []).map((t) => ({
+          id: t.id,
+          side: t.side,
+          price: t.priceUsd,
+          qty: t.baseAmount,
+          time: t.createdAt,
+        }))
+      );
+    } catch {
+      // keep current state; submit errors are shown on action
+    } finally {
+      setLoadingPortfolio(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshPortfolio();
+  }, []);
+
+  const handlePlaceOrder = async () => {
+    setSubmitError(null);
+    const px = Number.isFinite(lastPx) && lastPx > 0 ? lastPx : 0;
     const qty = Number(amount);
-    if (!Number.isFinite(px) || !Number.isFinite(qty) || qty <= 0) return;
-    setMyTrades((prev) => [{ side, price: px, qty, time: Date.now() }, ...prev].slice(0, 30));
-    setAmount("");
+    if (!Number.isFinite(px) || !Number.isFinite(qty) || qty <= 0) {
+      setSubmitError("Enter a valid amount.");
+      return;
+    }
+    if (qty * px < minTradeUsd) {
+      setSubmitError(`Minimum trade size is $${minTradeUsd.toFixed(2)}.`);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.demoMarketOrder({
+        side,
+        baseSymbol: baseAsset,
+        quoteSymbol: quoteAsset,
+        baseAmount: qty,
+      });
+      setAmount("");
+      await refreshPortfolio();
+    } catch (e: unknown) {
+      setSubmitError(e instanceof Error ? e.message : "Order failed");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -184,30 +233,41 @@ export default function Trade() {
             </button>
           </div>
 
-          <Tabs value={orderType} onValueChange={setOrderType}>
-            <TabsList className="w-full">
-              <TabsTrigger value="limit" className="flex-1">Limit</TabsTrigger>
-              <TabsTrigger value="market" className="flex-1">Market</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
           <div className="space-y-3">
-            {orderType === "limit" && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Price (USDT)</Label>
-                <Input value={price} onChange={(e) => setPrice(e.target.value)} className="font-mono" />
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Market Price ({quoteAsset})</Label>
+              <Input value={lastPx > 0 ? lastPx.toLocaleString() : "—"} readOnly className="font-mono" />
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Amount ({baseAsset})</Label>
               <Input placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="font-mono" />
             </div>
             <div className="grid grid-cols-4 gap-2">
               {["25%", "50%", "75%", "100%"].map((pct) => (
-                <Button key={pct} variant="outline" size="sm" className="text-xs">{pct}</Button>
+                <Button
+                  key={pct}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => {
+                    const p = Number(pct.replace("%", "")) / 100;
+                    const px = Number.isFinite(lastPx) && lastPx > 0 ? lastPx : 0;
+                    if (!Number.isFinite(px) || px <= 0) return;
+                    if (side === "buy") {
+                      const baseQty = (availableQuote * p) / px;
+                      setAmount(baseQty > 0 ? baseQty.toFixed(8).replace(/\.?0+$/, "") : "0");
+                    } else {
+                      const baseQty = availableBase * p;
+                      setAmount(baseQty > 0 ? baseQty.toFixed(8).replace(/\.?0+$/, "") : "0");
+                    }
+                  }}
+                >
+                  {pct}
+                </Button>
               ))}
             </div>
             <div className="rounded-md bg-muted p-3 space-y-1 text-xs">
+              {submitError ? <p className="text-sell text-[11px]">{submitError}</p> : null}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Available</span>
                 <span className="font-mono">
@@ -218,15 +278,20 @@ export default function Trade() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Est. Total</span>
-                <span className="font-mono">{amount && price ? `${(parseFloat(amount) * parseFloat(price.replace(/,/g, ""))).toFixed(2)} USDT` : "—"}</span>
+                <span className="font-mono">{amount && lastPx > 0 ? `${(parseFloat(amount) * lastPx).toFixed(2)} USDT` : "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Min Notional</span>
+                <span className="font-mono">${minTradeUsd.toFixed(2)}</span>
               </div>
             </div>
             <Button
               className={`w-full ${side === "buy" ? "bg-buy hover:bg-buy/90" : "bg-sell hover:bg-sell/90"}`}
               size="lg"
-              onClick={handlePlaceOrder}
+              onClick={() => void handlePlaceOrder()}
+              disabled={submitting || loadingPortfolio}
             >
-              {side === "buy" ? "Buy" : "Sell"} {baseAsset}
+              {submitting ? "Placing..." : side === "buy" ? "Buy" : "Sell"} {baseAsset}
             </Button>
           </div>
         </div>
@@ -293,7 +358,7 @@ export default function Trade() {
           </div>
         </div>
 
-        {/* Your Trades (local until trading backend exists) */}
+        {/* Your Trades */}
         <div className="rounded-lg border overflow-hidden">
           <div className="bg-muted/50 px-4 py-2 border-b">
             <h3 className="text-sm font-semibold">Your Trades</h3>
@@ -309,7 +374,7 @@ export default function Trade() {
               <div className="px-3 py-3 text-muted-foreground">No trades yet.</div>
             ) : (
               myTrades.map((t, i) => (
-                <div key={i} className="grid grid-cols-4 px-3 py-1.5 hover:bg-muted/30 font-mono">
+                <div key={t.id || i} className="grid grid-cols-4 px-3 py-1.5 hover:bg-muted/30 font-mono">
                   <span className={t.side === "buy" ? "text-buy" : "text-sell"}>{t.side.toUpperCase()}</span>
                   <span className="text-right">{t.price.toLocaleString()}</span>
                   <span className="text-right">{t.qty.toFixed(baseAsset === "BTC" ? 6 : 4)}</span>

@@ -78,6 +78,9 @@ export type AdminAuditLog = {
   ip: string;
 };
 
+export type DemoTradeTransferDirection = "funding_to_trading" | "trading_to_funding";
+export type DemoTradeSide = "buy" | "sell";
+
 export type AdminUserRow = {
   id: string;
   name: string;
@@ -429,6 +432,98 @@ export const api = {
       throw new Error(NETWORK_ERROR_MESSAGE);
     }
     return handleResponse<{ ok: true; activity: RecentActivityItem[] }>(res);
+  },
+
+  async demoTradePortfolio() {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/trade/portfolio`, { headers: getAuthHeaders() });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      minTradeNotionalUsd: number;
+      balances: Record<string, number>;
+      trades: Array<{
+        id: string;
+        baseSymbol: string;
+        quoteSymbol: string;
+        side: DemoTradeSide;
+        baseAmount: number;
+        quoteAmount: number;
+        priceUsd: number;
+        notionalUsd: number;
+        createdAt: string;
+      }>;
+      transfers: Array<{
+        id: string;
+        assetSymbol: string;
+        amount: number;
+        direction: DemoTradeTransferDirection;
+        createdAt: string;
+      }>;
+    }>(res);
+  },
+
+  async demoTradeTransfer(body: {
+    assetSymbol: string;
+    amount: number;
+    direction: DemoTradeTransferDirection;
+  }) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/trade/transfer`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      transfer: {
+        assetSymbol: string;
+        amount: number;
+        direction: DemoTradeTransferDirection;
+        fundingBalance: number;
+        tradingBalance: number;
+      };
+    }>(res);
+  },
+
+  async demoMarketOrder(body: {
+    side: DemoTradeSide;
+    baseSymbol: string;
+    quoteSymbol: string;
+    baseAmount: number;
+  }) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/trade/orders/market`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      trade: {
+        id?: string;
+        side: DemoTradeSide;
+        baseSymbol: string;
+        quoteSymbol: string;
+        baseAmount: number;
+        quoteAmount: number;
+        priceUsd: number;
+        notionalUsd: number;
+        createdAt: string;
+      };
+      balances: Record<string, number>;
+    }>(res);
   },
 
   async adminOverview() {

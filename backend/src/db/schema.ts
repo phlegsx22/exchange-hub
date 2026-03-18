@@ -165,6 +165,8 @@ export const withdrawalStatusEnum = pgEnum("withdrawal_status", [
 ]);
 
 export const walletStatusEnum = pgEnum("wallet_status", ["active", "frozen", "pending"]);
+export const demoTransferDirectionEnum = pgEnum("demo_transfer_direction", ["funding_to_trading", "trading_to_funding"]);
+export const demoTradeSideEnum = pgEnum("demo_trade_side", ["buy", "sell"]);
 
 export const chains = pgTable(
   "chains",
@@ -340,6 +342,58 @@ export const walletAccounts = pgTable(
     uniqueIndex("wallet_account_user_asset_network_unique").on(t.userId, t.assetNetworkId),
     index("wallet_account_user_idx").on(t.userId),
   ]
+);
+
+// --- Demo trading (paper engine) ---
+
+export const demoTradingBalances = pgTable(
+  "demo_trading_balances",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    assetSymbol: varchar("asset_symbol", { length: 20 }).notNull(),
+    balance: numeric("balance", { precision: 36, scale: 18 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("demo_trading_balance_user_symbol_unique").on(t.userId, t.assetSymbol)]
+);
+
+export const demoTransfers = pgTable(
+  "demo_transfers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    assetSymbol: varchar("asset_symbol", { length: 20 }).notNull(),
+    amount: numeric("amount", { precision: 36, scale: 18 }).notNull(),
+    direction: demoTransferDirectionEnum("direction").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("demo_transfers_user_created_idx").on(t.userId, t.createdAt)]
+);
+
+export const demoTrades = pgTable(
+  "demo_trades",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    baseSymbol: varchar("base_symbol", { length: 20 }).notNull(),
+    quoteSymbol: varchar("quote_symbol", { length: 20 }).notNull(),
+    side: demoTradeSideEnum("side").notNull(),
+    baseAmount: numeric("base_amount", { precision: 36, scale: 18 }).notNull(),
+    quoteAmount: numeric("quote_amount", { precision: 36, scale: 18 }).notNull(),
+    priceUsd: numeric("price_usd", { precision: 36, scale: 18 }).notNull(),
+    quotePriceUsd: numeric("quote_price_usd", { precision: 36, scale: 18 }).notNull(),
+    notionalUsd: numeric("notional_usd", { precision: 36, scale: 18 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("demo_trades_user_created_idx").on(t.userId, t.createdAt)]
 );
 
 /**

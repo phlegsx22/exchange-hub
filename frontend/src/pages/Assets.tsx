@@ -24,6 +24,7 @@ export default function Assets() {
   const [showBalances, setShowBalances] = useState(true);
   const [supportedSymbols, setSupportedSymbols] = useState<string[]>([]);
   const [supportedLoading, setSupportedLoading] = useState(true);
+  const [demoTradingBalances, setDemoTradingBalances] = useState<Record<string, number>>({});
 
   useEffect(() => {
     void (async () => {
@@ -35,6 +36,17 @@ export default function Assets() {
         setSupportedSymbols(["BTC", "ETH", "USDT", "USDC", "BNB", "SOL", "TRX", "ARB"]);
       } finally {
         setSupportedLoading(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await api.demoTradePortfolio();
+        setDemoTradingBalances(r.balances ?? {});
+      } catch {
+        setDemoTradingBalances({});
       }
     })();
   }, []);
@@ -77,6 +89,14 @@ export default function Assets() {
   }, [balances, portfolioItemBySymbol, supportedSymbols, tickers]);
 
   const totalValue = portfolio?.totalValueUsd ?? rows.totalValue;
+  const tradingValue = useMemo(() => {
+    return Object.entries(demoTradingBalances).reduce((sum, [symbol, bal]) => {
+      const meta = TOKENS[symbol as keyof typeof TOKENS];
+      const p = tickers[symbol as keyof typeof tickers]?.priceUsd ?? meta?.fixedUsdPrice ?? 0;
+      return sum + (Number.isFinite(bal) ? bal : 0) * (Number.isFinite(p) ? p : 0);
+    }, 0);
+  }, [demoTradingBalances, tickers]);
+  const fundingAvailableEstimate = Math.max(totalValue - tradingValue, 0);
   const btcPrice = tickers.BTC?.priceUsd ?? TOKENS.BTC?.fixedUsdPrice ?? 0;
   const btcEquivalent = btcPrice > 0 ? totalValue / btcPrice : 0;
 
@@ -154,6 +174,20 @@ export default function Assets() {
             ))}
           </div>
           <div className="rounded-lg border bg-card p-4">
+            <div className="space-y-2 mb-4 pb-3 border-b">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Funding</span>
+                <span className="font-mono">${totalValue.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Trading Allocation</span>
+                <span className="font-mono">${tradingValue.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Funding Available (Est.)</span>
+                <span className="font-mono">${fundingAvailableEstimate.toFixed(2)}</span>
+              </div>
+            </div>
             <div className="flex items-center gap-1.5 mb-3">
               <PieChart className="h-4 w-4" />
               <span className="text-xs font-semibold">Top Allocation</span>
