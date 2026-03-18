@@ -21,7 +21,7 @@ function makeReceiptNo(prefix: "WDL"): string {
 }
 
 function getWithdrawalFeeUsd(chainSlug: string): number {
-  return chainSlug === "ethereum" ? 3 : 1;
+  return chainSlug === "ethereum" ? 2 : 1;
 }
 
 function getPriceForFee(symbol: string): number | null {

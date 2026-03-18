@@ -5,17 +5,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertCircle, Send, Shield, Clock, ShieldCheck, ArrowRight,
-  Info, CheckCircle, Copy, ExternalLink
+  CheckCircle, Copy
 } from "lucide-react";
-import { DEFAULT_WATCHLIST, type TokenSymbol } from "@/lib/tokens";
+import { DEFAULT_WATCHLIST } from "@/lib/tokens";
 import { useUserBalances } from "@/hooks/useUserBalances";
 import { api, type SupportedAssetNetwork } from "@/lib/api";
-
-const recentWithdrawals = [
-  { coin: "BTC", amount: "0.05", address: "bc1q...7x4f", status: "Completed", time: "2d ago" },
-  { coin: "ETH", amount: "2.0", address: "0x3f...8a2b", status: "Completed", time: "5d ago" },
-  { coin: "USDT", amount: "500.00", address: "TJ7x...9kL2", status: "Processing", time: "1h ago" },
-];
+import { useRecentActivity } from "@/hooks/useRecentActivity";
 
 export default function Withdraw() {
   const [coin, setCoin] = useState("");
@@ -27,8 +22,12 @@ export default function Withdraw() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [networks, setNetworks] = useState<SupportedAssetNetwork[]>([]);
-  const [quote, setQuote] = useState<{ feeUsd: number; feeAmount: number; totalDebitAmount: number } | null>(null);
-  const { balances } = useUserBalances(DEFAULT_WATCHLIST);
+  const watchSymbols = useMemo(() => {
+    const symbols = Array.from(new Set(networks.map((n) => n.assetSymbol)));
+    return symbols.length > 0 ? symbols : DEFAULT_WATCHLIST;
+  }, [networks]);
+  const { balances, portfolio } = useUserBalances(watchSymbols);
+  const recent = useRecentActivity(20);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,47 +55,71 @@ export default function Withdraw() {
     return Array.from(new Set(networks.map((n) => n.assetSymbol))).sort();
   }, [networks]);
 
-  useEffect(() => {
-    if (!coin && assets.length > 0) setCoin(assets[0].toLowerCase());
-  }, [coin, assets]);
-
   const assetNetworks = useMemo(() => {
     const symbol = coin.toUpperCase();
     return networks.filter((n) => n.assetSymbol === symbol);
   }, [networks, coin]);
 
   useEffect(() => {
-    setAssetNetworkId(assetNetworks[0]?.id ?? "");
-  }, [assetNetworks]);
-
-  const selectedSymbol = useMemo<TokenSymbol | null>(() => {
-    switch (coin) {
-      case "btc":
-        return "BTC";
-      case "eth":
-        return "ETH";
-      case "usdt":
-        return "USDT";
-      case "sol":
-        return "SOL";
-      default:
-        return null;
+    // If user changes coin and current network does not match, clear it.
+    if (!assetNetworkId) return;
+    if (!assetNetworks.some((n) => n.id === assetNetworkId)) {
+      setAssetNetworkId("");
     }
-  }, [coin]);
+  }, [assetNetworks, assetNetworkId]);
 
-  const available = selectedSymbol ? (balances[selectedSymbol] ?? 0) : 0;
+  const selectedSymbol = coin.toUpperCase();
+  const available = coin ? (balances[selectedSymbol] ?? 0) : 0;
   const selectedNetwork = useMemo(
     () => networks.find((n) => n.id === assetNetworkId) ?? null,
     [networks, assetNetworkId]
   );
-  const feeUsd = selectedNetwork?.chainSlug === "ethereum" ? 3 : 1;
+  const feeUsd = selectedNetwork?.chainSlug === "ethereum" ? 2 : 1;
+  const priceBySymbol = useMemo(
+    () => new Map((portfolio?.items ?? []).map((item) => [item.symbol, item.priceUsd ?? null])),
+    [portfolio]
+  );
+  const selectedPriceUsd = useMemo(() => {
+    if (!coin) return null;
+    if (selectedSymbol === "USDT" || selectedSymbol === "USDC") return 1;
+    const p = priceBySymbol.get(selectedSymbol);
+    return typeof p === "number" && Number.isFinite(p) && p > 0 ? p : null;
+  }, [coin, selectedSymbol, priceBySymbol]);
+
   const feeAmountPreview = useMemo(() => {
-    const amt = Number(amount);
-    const symbol = coin.toUpperCase();
-    if (!Number.isFinite(amt) || amt <= 0) return 0;
-    if (symbol === "USDT" || symbol === "USDC") return feeUsd;
-    return 0;
-  }, [amount, coin, feeUsd]);
+    if (!coin || !assetNetworkId) return 0;
+    if (selectedPriceUsd == null || selectedPriceUsd <= 0) return 0;
+    return feeUsd / selectedPriceUsd;
+  }, [coin, assetNetworkId, feeUsd, selectedPriceUsd]);
+  const maxReceivable = Math.max(available - feeAmountPreview, 0);
+  const enteredAmount = Number(amount);
+  const receiveAmount = Number.isFinite(enteredAmount) && enteredAmount > 0 ? enteredAmount : 0;
+  const totalDebit = receiveAmount + feeAmountPreview;
+
+  const recentWithdrawals = useMemo(() => {
+    const items = (recent.data ?? []).filter((it) => it.type === "withdrawal");
+    return items.slice(0, 8).map((it) => {
+      const absAmount = Math.abs(Number.parseFloat(it.amount || "0"));
+      const createdMs = Date.now() - new Date(it.createdAt).getTime();
+      const minutes = Math.floor(createdMs / 60000);
+      let rel = "just now";
+      if (minutes >= 60 * 24) rel = `${Math.floor(minutes / (60 * 24))}d ago`;
+      else if (minutes >= 60) rel = `${Math.floor(minutes / 60)}h ago`;
+      else if (minutes >= 1) rel = `${minutes}m ago`;
+      return {
+        id: it.id,
+        amount: absAmount,
+        asset: it.assetSymbol,
+        network: it.chainName,
+        receiptNo: it.receiptNo ?? null,
+        time: rel,
+      };
+    });
+  }, [recent.data]);
+
+  function handleMax(): void {
+    setAmount(maxReceivable > 0 ? maxReceivable.toFixed(8).replace(/\.?0+$/, "") : "0");
+  }
 
   async function handleWithdrawRequest(): Promise<void> {
     setError(null);
@@ -122,11 +145,6 @@ export default function Withdraw() {
         toAddress: address.trim(),
         amount: amt,
       });
-      setQuote({
-        feeUsd: r.withdrawal.feeUsd ?? feeUsd,
-        feeAmount: r.withdrawal.feeAmount ?? feeAmountPreview,
-        totalDebitAmount: r.withdrawal.totalDebitAmount ?? amt + feeAmountPreview,
-      });
       setSuccess(
         `Withdrawal request submitted (receipt: ${r.withdrawal.receiptNo ?? "pending"}). Admin will review and send funds.`
       );
@@ -139,7 +157,7 @@ export default function Withdraw() {
   }
 
   return (
-    <div className="container py-8 max-w-2xl space-y-6">
+    <div className="container py-8 max-w-5xl space-y-6">
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Send className="h-5 w-5" />
@@ -148,9 +166,9 @@ export default function Withdraw() {
         <p className="text-muted-foreground text-sm">Send crypto to an external wallet</p>
       </div>
 
-      <div className="grid lg:grid-cols-[1fr,280px] gap-6">
+      <div className="grid lg:grid-cols-[minmax(0,1fr),320px] gap-6">
         {/* Withdraw form */}
-        <div className="rounded-lg border bg-card p-6 space-y-4">
+        <div className="rounded-lg border bg-card p-7 space-y-4">
           {error && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
               {error}
@@ -163,7 +181,15 @@ export default function Withdraw() {
           )}
           <div className="space-y-2">
             <Label>Select Coin</Label>
-            <Select value={coin} onValueChange={setCoin} disabled={loading || assets.length === 0}>
+            <Select
+              value={coin}
+              onValueChange={(v) => {
+                setCoin(v);
+                setAssetNetworkId("");
+                setAmount("");
+              }}
+              disabled={loading || assets.length === 0}
+            >
               <SelectTrigger><SelectValue placeholder="Choose asset" /></SelectTrigger>
               <SelectContent>
                 {assets.map((a) => (
@@ -175,7 +201,14 @@ export default function Withdraw() {
 
           <div className="space-y-2">
             <Label>Network</Label>
-            <Select value={assetNetworkId} onValueChange={setAssetNetworkId} disabled={loading || assetNetworks.length === 0}>
+            <Select
+              value={assetNetworkId}
+              onValueChange={(v) => {
+                setAssetNetworkId(v);
+                setAmount("");
+              }}
+              disabled={loading || !coin || assetNetworks.length === 0}
+            >
               <SelectTrigger><SelectValue placeholder="Select network" /></SelectTrigger>
               <SelectContent>
                 {assetNetworks.map((n) => (
@@ -199,12 +232,19 @@ export default function Withdraw() {
             <div className="flex justify-between">
               <Label>Amount</Label>
               <span className="text-xs text-muted-foreground">
-                Available: {selectedSymbol ? `${available.toFixed(selectedSymbol === "BTC" ? 6 : 4)} ${selectedSymbol}` : "—"}
+                Available: {coin ? `${available.toFixed(selectedSymbol === "BTC" ? 6 : 4)} ${selectedSymbol}` : "—"}
               </span>
             </div>
             <div className="relative">
               <Input placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="pr-16 font-mono" />
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-foreground hover:opacity-70">MAX</button>
+              <button
+                type="button"
+                onClick={handleMax}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-foreground hover:opacity-70"
+                disabled={!coin || !assetNetworkId}
+              >
+                MAX
+              </button>
             </div>
           </div>
 
@@ -213,10 +253,10 @@ export default function Withdraw() {
               <span className="text-muted-foreground">Network Fee</span>
               <span className="font-mono">
                 {coin ? `~$${feeUsd.toFixed(2)}` : "—"}
-                {coin && (
+                {coin && selectedPriceUsd != null && (
                   <span className="text-muted-foreground">
                     {" "}
-                    ({(quote?.feeAmount ?? feeAmountPreview).toFixed(8)} {coin.toUpperCase()})
+                    ({feeAmountPreview.toFixed(8)} {coin.toUpperCase()})
                   </span>
                 )}
               </span>
@@ -226,11 +266,17 @@ export default function Withdraw() {
               <span className="font-mono">0.00</span>
             </div>
             <div className="border-t pt-2 flex justify-between font-medium">
-              <span>Total Debit</span>
+              <span>Total Received</span>
               <span className="font-mono">
-                {selectedSymbol
-                  ? `${(quote?.totalDebitAmount ?? ((Number(amount) || 0) + feeAmountPreview)).toFixed(8)} ${selectedSymbol}`
+                {coin
+                  ? `${receiveAmount.toFixed(8)} ${selectedSymbol}`
                   : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total Debit (Received + Fee)</span>
+              <span className="font-mono">
+                {coin ? `${totalDebit.toFixed(8)} ${selectedSymbol}` : "—"}
               </span>
             </div>
           </div>
@@ -242,7 +288,12 @@ export default function Withdraw() {
             </p>
           </div>
 
-          <Button className="w-full gap-2" size="lg" onClick={() => void handleWithdrawRequest()} disabled={submitting || loading}>
+          <Button
+            className="w-full gap-2"
+            size="lg"
+            onClick={() => void handleWithdrawRequest()}
+            disabled={submitting || loading || !coin || !assetNetworkId}
+          >
             {submitting ? "Submitting..." : "Withdraw"} <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
@@ -253,20 +304,24 @@ export default function Withdraw() {
           <div className="rounded-lg border bg-card p-4">
             <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Recent</h3>
             <div className="space-y-3">
-              {recentWithdrawals.map((w, i) => (
-                <div key={i} className="text-xs">
+              {recent.isLoading ? (
+                <p className="text-xs text-muted-foreground">Loading recent withdrawals...</p>
+              ) : recentWithdrawals.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No withdrawal activity yet.</p>
+              ) : (
+                recentWithdrawals.map((w) => (
+                <div key={w.id} className="text-xs">
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="font-medium">{w.amount} {w.coin}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                      w.status === "Completed" ? "bg-buy/10 text-buy" : "bg-warning/10 text-warning"
-                    }`}>{w.status}</span>
+                    <span className="font-medium">{w.amount.toFixed(8)} {w.asset}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-buy/10 text-buy">Sent</span>
                   </div>
                   <div className="flex items-center justify-between text-muted-foreground">
-                    <span className="font-mono">{w.address}</span>
+                    <span className="font-mono">{w.receiptNo ?? "—"}</span>
                     <span>{w.time}</span>
                   </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{w.network}</p>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
 
