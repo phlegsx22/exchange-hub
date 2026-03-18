@@ -27,6 +27,7 @@ export default function Withdraw() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [networks, setNetworks] = useState<SupportedAssetNetwork[]>([]);
+  const [quote, setQuote] = useState<{ feeUsd: number; feeAmount: number; totalDebitAmount: number } | null>(null);
   const { balances } = useUserBalances(DEFAULT_WATCHLIST);
 
   useEffect(() => {
@@ -84,6 +85,18 @@ export default function Withdraw() {
   }, [coin]);
 
   const available = selectedSymbol ? (balances[selectedSymbol] ?? 0) : 0;
+  const selectedNetwork = useMemo(
+    () => networks.find((n) => n.id === assetNetworkId) ?? null,
+    [networks, assetNetworkId]
+  );
+  const feeUsd = selectedNetwork?.chainSlug === "ethereum" ? 3 : 1;
+  const feeAmountPreview = useMemo(() => {
+    const amt = Number(amount);
+    const symbol = coin.toUpperCase();
+    if (!Number.isFinite(amt) || amt <= 0) return 0;
+    if (symbol === "USDT" || symbol === "USDC") return feeUsd;
+    return 0;
+  }, [amount, coin, feeUsd]);
 
   async function handleWithdrawRequest(): Promise<void> {
     setError(null);
@@ -104,12 +117,19 @@ export default function Withdraw() {
 
     setSubmitting(true);
     try {
-      await api.withdrawRequest({
+      const r = await api.withdrawRequest({
         assetNetworkId,
         toAddress: address.trim(),
         amount: amt,
       });
-      setSuccess("Withdrawal request submitted. Admin will review it.");
+      setQuote({
+        feeUsd: r.withdrawal.feeUsd ?? feeUsd,
+        feeAmount: r.withdrawal.feeAmount ?? feeAmountPreview,
+        totalDebitAmount: r.withdrawal.totalDebitAmount ?? amt + feeAmountPreview,
+      });
+      setSuccess(
+        `Withdrawal request submitted (receipt: ${r.withdrawal.receiptNo ?? "pending"}). Admin will review and send funds.`
+      );
       setAmount("");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to submit withdrawal request");
@@ -191,16 +211,26 @@ export default function Withdraw() {
           <div className="rounded-lg border p-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Network Fee</span>
-              <span className="font-mono">—</span>
+              <span className="font-mono">
+                {coin ? `~$${feeUsd.toFixed(2)}` : "—"}
+                {coin && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    ({(quote?.feeAmount ?? feeAmountPreview).toFixed(8)} {coin.toUpperCase()})
+                  </span>
+                )}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Minimum Withdrawal</span>
-              <span className="font-mono">—</span>
+              <span className="font-mono">0.00</span>
             </div>
             <div className="border-t pt-2 flex justify-between font-medium">
-              <span>You'll Receive</span>
+              <span>Total Debit</span>
               <span className="font-mono">
-                {selectedSymbol ? `${amount ? amount : "0"} ${selectedSymbol}` : "—"}
+                {selectedSymbol
+                  ? `${(quote?.totalDebitAmount ?? ((Number(amount) || 0) + feeAmountPreview)).toFixed(8)} ${selectedSymbol}`
+                  : "—"}
               </span>
             </div>
           </div>

@@ -32,6 +32,7 @@ import AdminBlacklist from "./pages/admin/AdminBlacklist";
 import AdminAlerts from "./pages/admin/AdminAlerts";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminKyc from "./pages/admin/AdminKyc";
+import AdminWithdrawals from "./pages/admin/AdminWithdrawals";
 import { RequireAdmin, RequireVerified, RequireKycApproved, RedirectIfAuthenticated } from "@/components/RouteGuards";
 
 const queryClient = new QueryClient();
@@ -85,6 +86,7 @@ const App = () => (
               <Route path="wallets" element={<AdminWallets />} />
               <Route path="assets" element={<AdminAssets />} />
               <Route path="kyc" element={<AdminKyc />} />
+              <Route path="withdrawals" element={<AdminWithdrawals />} />
               <Route path="features" element={<AdminFeatures />} />
               <Route path="logs" element={<AdminLogs />} />
               <Route path="blacklist" element={<AdminBlacklist />} />

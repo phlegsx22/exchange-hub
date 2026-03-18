@@ -1299,6 +1299,198 @@ router.get(
   }
 );
 
+// --- Admin Withdrawals ---
+
+router.get(
+  "/withdrawals",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const statusRaw = typeof req.query.status === "string" ? req.query.status.trim().toLowerCase() : "all";
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const limitRaw = typeof req.query.limit === "string" ? Number(req.query.limit) : 100;
+    const offsetRaw = typeof req.query.offset === "string" ? Number(req.query.offset) : 0;
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 100;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+
+    const dbStatus =
+      statusRaw === "sent"
+        ? "broadcast"
+        : ["pending", "processing", "broadcast", "completed", "failed", "cancelled"].includes(statusRaw)
+          ? statusRaw
+          : "all";
+
+    try {
+      const whereParts = [];
+      if (dbStatus !== "all") whereParts.push(eq(withdrawals.status, dbStatus as typeof withdrawals.status.enumValues[number]));
+      if (q) {
+        const like = `%${q}%`;
+        whereParts.push(or(ilike(users.name, like), ilike(users.email, like), ilike(users.id, like), ilike(withdrawals.toAddress, like), ilike(withdrawals.receiptNo, like)));
+      }
+      const where =
+        whereParts.length === 0
+          ? undefined
+          : whereParts.length === 1
+            ? whereParts[0]
+            : and(...whereParts);
+
+      const rows = await db
+        .select({
+          id: withdrawals.id,
+          userId: withdrawals.userId,
+          userName: users.name,
+          userEmail: users.email,
+          assetSymbol: assets.symbol,
+          chainSlug: chains.slug,
+          chainName: chains.name,
+          amount: withdrawals.amount,
+          fee: withdrawals.fee,
+          toAddress: withdrawals.toAddress,
+          txHash: withdrawals.txHash,
+          receiptNo: withdrawals.receiptNo,
+          status: withdrawals.status,
+          createdAt: withdrawals.createdAt,
+          updatedAt: withdrawals.updatedAt,
+        })
+        .from(withdrawals)
+        .innerJoin(users, eq(withdrawals.userId, users.id))
+        .innerJoin(assetNetworks, eq(withdrawals.assetNetworkId, assetNetworks.id))
+        .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
+        .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
+        .where(where)
+        .orderBy(desc(withdrawals.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      res.json({
+        ok: true,
+        withdrawals: rows.map((r) => ({
+          ...r,
+          status: r.status === "broadcast" || r.status === "completed" ? "sent" : r.status,
+          createdAt: r.createdAt.toISOString(),
+          updatedAt: r.updatedAt.toISOString(),
+        })),
+        limit,
+        offset,
+      });
+    } catch (err) {
+      console.error("Admin list withdrawals failed:", err);
+      res.status(500).json({ error: "Failed to load withdrawals", code: "SERVER_ERROR" });
+    }
+  }
+);
+
+router.patch(
+  "/withdrawals/:id/status",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const id = req.params.id;
+    const statusRaw = String(req.body?.status ?? "").trim().toLowerCase();
+    const txHashRaw = typeof req.body?.txHash === "string" ? req.body.txHash.trim() : "";
+    if (!["pending", "processing", "sent", "failed", "cancelled"].includes(statusRaw)) {
+      res.status(400).json({ error: "Invalid status", code: "VALIDATION_FAILED" });
+      return;
+    }
+    const nextDbStatus =
+      statusRaw === "sent" ? "broadcast" : (statusRaw as "pending" | "processing" | "failed" | "cancelled");
+
+    try {
+      const [row] = await db
+        .select({
+          id: withdrawals.id,
+          userId: withdrawals.userId,
+          assetNetworkId: withdrawals.assetNetworkId,
+          amount: withdrawals.amount,
+          fee: withdrawals.fee,
+          status: withdrawals.status,
+          receiptNo: withdrawals.receiptNo,
+        })
+        .from(withdrawals)
+        .where(eq(withdrawals.id, id))
+        .limit(1);
+
+      if (!row) {
+        res.status(404).json({ error: "Withdrawal not found", code: "NOT_FOUND" });
+        return;
+      }
+
+      if (nextDbStatus === "broadcast") {
+        const [existingRef] = await db
+          .select({ id: ledgerEntries.id })
+          .from(ledgerEntries)
+          .where(and(eq(ledgerEntries.refType, "withdrawal"), eq(ledgerEntries.refId, row.id)))
+          .limit(1);
+
+        if (!existingRef) {
+          const [balRow] = await db
+            .select({
+              total: sql<string | null>`COALESCE(SUM(${ledgerEntries.amount}), 0)`,
+            })
+            .from(ledgerEntries)
+            .where(and(eq(ledgerEntries.userId, row.userId), eq(ledgerEntries.assetNetworkId, row.assetNetworkId)));
+
+          const bal = Number(balRow?.total ?? 0);
+          const amount = Number(row.amount ?? 0);
+          const fee = Number(row.fee ?? 0);
+          const debit = amount + fee;
+          const balanceAfter = bal - debit;
+          if (!Number.isFinite(balanceAfter) || balanceAfter < 0) {
+            res.status(400).json({
+              error: "Insufficient available balance to mark withdrawal as sent.",
+              code: "INSUFFICIENT_BALANCE",
+            });
+            return;
+          }
+
+          await db.insert(ledgerEntries).values({
+            userId: row.userId,
+            assetNetworkId: row.assetNetworkId,
+            amount: String(-debit),
+            balanceAfter: String(balanceAfter),
+            type: "withdrawal",
+            refType: "withdrawal",
+            refId: row.id,
+            description: `Withdrawal sent${txHashRaw ? ` (tx: ${txHashRaw})` : ""}`,
+          });
+        }
+      }
+
+      const [updated] = await db
+        .update(withdrawals)
+        .set({
+          status: nextDbStatus,
+          txHash: txHashRaw || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(withdrawals.id, id))
+        .returning({
+          id: withdrawals.id,
+          userId: withdrawals.userId,
+          status: withdrawals.status,
+          receiptNo: withdrawals.receiptNo,
+          txHash: withdrawals.txHash,
+          updatedAt: withdrawals.updatedAt,
+        });
+
+      res.json({
+        ok: true,
+        withdrawal: {
+          id: updated?.id ?? id,
+          userId: updated?.userId ?? row.userId,
+          status: updated?.status === "broadcast" || updated?.status === "completed" ? "sent" : updated?.status ?? statusRaw,
+          receiptNo: updated?.receiptNo ?? row.receiptNo,
+          txHash: updated?.txHash ?? null,
+          updatedAt: updated?.updatedAt?.toISOString() ?? new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      console.error("Admin update withdrawal status failed:", err);
+      res.status(500).json({ error: "Failed to update withdrawal status", code: "SERVER_ERROR" });
+    }
+  }
+);
+
 // --- Admin Wallets (MVP) ---
 
 router.get(

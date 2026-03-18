@@ -2,7 +2,7 @@ import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, Wallet, Coins, ToggleLeft, ScrollText,
-  Shield, Settings, AlertTriangle, Ban, FileCheck2
+  Shield, Settings, AlertTriangle, Ban, FileCheck2, Send
 } from "lucide-react";
 import logo from "@/assets/logo.png";
 import {
@@ -16,6 +16,7 @@ const mainNav = [
   { title: "Users", url: "/admin/users", icon: Users },
   { title: "KYC Review", url: "/admin/kyc", icon: FileCheck2 },
   { title: "Wallets", url: "/admin/wallets", icon: Wallet },
+  { title: "Withdrawals", url: "/admin/withdrawals", icon: Send },
   { title: "Assets & Networks", url: "/admin/assets", icon: Coins },
   { title: "Features", url: "/admin/features", icon: ToggleLeft },
   { title: "Logs", url: "/admin/logs", icon: ScrollText },

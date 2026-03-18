@@ -66,9 +66,7 @@ export default function Dashboard() {
               ? "Trade"
               : it.type === "transfer"
                 ? "Transfer"
-                : it.type === "fee"
-                  ? "Fee"
-                  : "Adjustment";
+                : "Fee";
 
       return {
         id: it.id,

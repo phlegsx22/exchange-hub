@@ -31,6 +31,20 @@ const DEFAULT_POLL_MS = Number(process.env.CHAIN_POLL_INTERVAL_MS ?? 60000);
 const BTC_API_BASE = process.env.BTC_API_BASE ?? "https://blockstream.info/api";
 const TRON_GRID_API_BASE = process.env.TRON_GRID_API_BASE ?? "https://api.trongrid.io";
 const TRON_PRO_API_KEY = process.env.TRON_PRO_API_KEY ?? "";
+const CONTRACT_FALLBACKS: Record<string, string> = {
+  "USDT:ethereum": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+  "USDC:ethereum": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "USDT:bsc": "0x55d398326f99059ff775485246999027b3197955",
+  "USDC:bsc": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+  "USDT:base": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+  "USDC:base": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "USDT:arbitrum": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+  "USDC:arbitrum": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "ARB:arbitrum": "0x912CE59144191C1204E64559FE8253a0e49E6548",
+  "TRX:ethereum": "0x50327c6c5a14dcade707abad2e27eb517df87ab5",
+  "USDT:tron": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+  "USDC:tron": "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
+};
 
 const providers = new Map<string, JsonRpcProvider>();
 const tokenDecimalsCache = new Map<string, number>();
@@ -155,10 +169,17 @@ async function getTokenDecimals(row: AddressRow, provider: JsonRpcProvider): Pro
   return row.decimals;
 }
 
+function resolveContractAddress(row: AddressRow): string | null {
+  if (row.contractAddress) return row.contractAddress;
+  const key = `${row.assetSymbol}:${row.chainSlug}`;
+  return CONTRACT_FALLBACKS[key] ?? null;
+}
+
 async function getOnchainBalanceAtomic(row: AddressRow): Promise<{ balanceAtomic: bigint; decimals: number } | null> {
+  const contractAddress = resolveContractAddress(row);
   // Safety: do NOT treat native chain balance as token balance.
   // If an asset is non-native, it must have a contract address for polling.
-  if (!row.assetIsNative && !row.contractAddress) {
+  if (!row.assetIsNative && !contractAddress) {
     return null;
   }
 
@@ -175,14 +196,20 @@ async function getOnchainBalanceAtomic(row: AddressRow): Promise<{ balanceAtomic
   const provider = getProvider(row.chainSlug);
   if (!provider) return null;
 
-  if (!row.contractAddress) {
+  if (!contractAddress) {
     const b = await provider.getBalance(row.address);
     return { balanceAtomic: b, decimals: row.decimals };
   }
 
-  const token = new Contract(row.contractAddress, ERC20_ABI, provider);
+  const token = new Contract(contractAddress, ERC20_ABI, provider);
   const bal = (await token.balanceOf(row.address)) as bigint;
-  const decimals = await getTokenDecimals(row, provider);
+  const decimals = await getTokenDecimals(
+    {
+      ...row,
+      contractAddress,
+    },
+    provider
+  );
   return { balanceAtomic: bal, decimals };
 }
 
@@ -302,7 +329,6 @@ async function pollOnce(): Promise<void> {
       .innerJoin(chains, eq(assetNetworks.chainId, chains.id));
 
     for (const row of rows) {
-      if (!row.isDepositEnabled) continue;
       try {
         const onchain = await getOnchainBalanceAtomic(row);
         if (onchain == null) continue; // unsupported chain in free-RPC MVP

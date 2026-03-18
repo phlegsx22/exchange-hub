@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AuthRequest } from "../middleware/auth.js";
 import { authMiddleware, requireAccountActive, requireVerified } from "../middleware/auth.js";
 import { db, ledgerEntries, assetNetworks, assets, chains, deposits, withdrawals } from "../db/index.js";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 
 const router = Router();
 
@@ -53,7 +53,7 @@ router.get(
         .innerJoin(chains, eq(assetNetworks.chainId, chains.id))
         .leftJoin(deposits, eq(ledgerEntries.refId, deposits.id))
         .leftJoin(withdrawals, eq(ledgerEntries.refId, withdrawals.id))
-        .where(eq(ledgerEntries.userId, req.user.id))
+        .where(and(eq(ledgerEntries.userId, req.user.id), ne(ledgerEntries.type, "adjustment")))
         .orderBy(desc(ledgerEntries.createdAt))
         .limit(limit);
 

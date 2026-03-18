@@ -56,7 +56,7 @@ export type UserDepositAddress = {
 
 export type RecentActivityItem = {
   id: string;
-  type: "deposit" | "withdrawal" | "trade" | "transfer" | "fee" | "adjustment";
+  type: "deposit" | "withdrawal" | "trade" | "transfer" | "fee";
   direction: "in" | "out";
   amount: string;
   assetSymbol: string;
@@ -404,7 +404,17 @@ export const api = {
     }
     return handleResponse<{
       ok: true;
-      withdrawal: { id?: string; receiptNo?: string; status: string; createdAt: string | Date };
+      withdrawal: {
+        id?: string;
+        receiptNo?: string;
+        status: string;
+        createdAt: string | Date;
+        feeUsd?: number;
+        feeAmount?: number;
+        totalDebitAmount?: number;
+        assetSymbol?: string;
+        chainSlug?: string;
+      };
     }>(res);
   },
 
@@ -664,6 +674,75 @@ export const api = {
         isDepositEnabled: boolean;
         isWithdrawEnabled: boolean;
       }>;
+    }>(res);
+  },
+
+  async adminWithdrawals(params?: {
+    q?: string;
+    status?: "all" | "pending" | "processing" | "sent" | "failed" | "cancelled";
+    limit?: number;
+    offset?: number;
+  }) {
+    const qs = new URLSearchParams();
+    if (params?.q) qs.set("q", params.q);
+    if (params?.status) qs.set("status", params.status);
+    if (typeof params?.limit === "number") qs.set("limit", String(params.limit));
+    if (typeof params?.offset === "number") qs.set("offset", String(params.offset));
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/withdrawals?${qs.toString()}`, { headers: getAuthHeaders() });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      withdrawals: Array<{
+        id: string;
+        userId: string;
+        userName: string;
+        userEmail: string;
+        assetSymbol: string;
+        chainSlug: string;
+        chainName: string;
+        amount: string;
+        fee: string;
+        toAddress: string;
+        txHash: string | null;
+        receiptNo: string;
+        status: "pending" | "processing" | "sent" | "failed" | "cancelled";
+        createdAt: string;
+        updatedAt: string;
+      }>;
+      limit: number;
+      offset: number;
+    }>(res);
+  },
+
+  async adminSetWithdrawalStatus(
+    withdrawalId: string,
+    status: "pending" | "processing" | "sent" | "failed" | "cancelled",
+    txHash?: string
+  ) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/withdrawals/${encodeURIComponent(withdrawalId)}/status`, {
+        method: "PATCH",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ status, txHash: txHash ?? "" }),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      withdrawal: {
+        id: string;
+        userId: string;
+        status: "pending" | "processing" | "sent" | "failed" | "cancelled";
+        receiptNo: string;
+        txHash: string | null;
+        updatedAt: string;
+      };
     }>(res);
   },
 
