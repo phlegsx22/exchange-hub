@@ -186,22 +186,6 @@ async function getOnchainBalanceAtomic(row: AddressRow): Promise<{ balanceAtomic
   return { balanceAtomic: bal, decimals };
 }
 
-async function getCreditedAtomic(userId: string, assetNetworkId: string, decimals: number): Promise<bigint> {
-  const [sumRow] = await db
-    .select({
-      total: sql<string | null>`COALESCE(SUM(${deposits.amount}), 0)`,
-    })
-    .from(deposits)
-    .where(and(eq(deposits.userId, userId), eq(deposits.assetNetworkId, assetNetworkId), eq(deposits.status, "completed")));
-
-  const total = sumRow?.total ?? "0";
-  try {
-    return parseUnits(total, decimals);
-  } catch {
-    return 0n;
-  }
-}
-
 async function getLedgerBalanceAtomic(userId: string, assetNetworkId: string, decimals: number): Promise<bigint> {
   const [sumRow] = await db
     .select({
@@ -275,6 +259,27 @@ async function creditDelta(row: AddressRow, deltaAtomic: bigint, onchainAtomic: 
   }
 }
 
+async function debitToOnchain(row: AddressRow, deltaAtomic: bigint, decimals: number): Promise<void> {
+  // deltaAtomic here is negative; convert to positive debit amount.
+  const debitAtomic = -deltaAtomic;
+  if (debitAtomic <= 0n) return;
+  const amount = formatUnits(debitAtomic, decimals);
+  const signedAmount = `-${amount}`;
+  const ledgerAtomic = await getLedgerBalanceAtomic(row.userId, row.assetNetworkId, decimals);
+  const nextAtomic = ledgerAtomic - debitAtomic;
+  const balanceAfter = formatUnits(nextAtomic < 0n ? 0n : nextAtomic, decimals);
+
+  await db.insert(ledgerEntries).values({
+    userId: row.userId,
+    assetNetworkId: row.assetNetworkId,
+    amount: signedAmount,
+    balanceAfter,
+    type: "adjustment",
+    refType: "onchain_reconcile",
+    description: "On-chain balance decreased; synchronized ledger to current address balance",
+  });
+}
+
 async function pollOnce(): Promise<void> {
   if (running) return;
   running = true;
@@ -301,10 +306,12 @@ async function pollOnce(): Promise<void> {
       try {
         const onchain = await getOnchainBalanceAtomic(row);
         if (onchain == null) continue; // unsupported chain in free-RPC MVP
-        const creditedAtomic = await getCreditedAtomic(row.userId, row.assetNetworkId, onchain.decimals);
-        const delta = onchain.balanceAtomic - creditedAtomic;
+        const ledgerAtomic = await getLedgerBalanceAtomic(row.userId, row.assetNetworkId, onchain.decimals);
+        const delta = onchain.balanceAtomic - ledgerAtomic;
         if (delta > 0n) {
           await creditDelta(row, delta, onchain.balanceAtomic, onchain.decimals);
+        } else if (delta < 0n) {
+          await debitToOnchain(row, delta, onchain.decimals);
         }
       } catch (err) {
         console.error(

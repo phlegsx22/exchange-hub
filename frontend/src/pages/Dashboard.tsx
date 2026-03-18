@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Send, ArrowLeftRight, TrendingUp,
   Eye, EyeOff, PieChart, Bell, Shield, ShieldCheck, Clock, Activity,
@@ -28,6 +29,7 @@ const notifications = [
 export default function Dashboard() {
   const { user } = useAuth();
   const [showBalances, setShowBalances] = useState(true);
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
   const { balances } = useUserBalances(DEFAULT_WATCHLIST);
   const tickers = useBinanceTickers(DEFAULT_WATCHLIST);
   const recent = useRecentActivity(10);
@@ -75,12 +77,16 @@ export default function Dashboard() {
         direction: it.direction,
         asset: it.assetSymbol,
         chain: it.chainName,
+        createdAt: it.createdAt,
+        receiptNo: it.receiptNo ?? null,
+        description: it.description ?? null,
         time: formatRelative(it.createdAt),
         amountText: `${amountNum.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${it.assetSymbol}`,
         valueText: valueUsd === null ? "—" : `$${valueUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
       };
     });
   }, [recent.data, tickers]);
+  const selectedActivity = activityRows.find((a) => a.id === selectedActivityId) ?? null;
   const holdings = useMemo(() => {
     const rows = DEFAULT_WATCHLIST.map((symbol) => {
       const meta = TOKENS[symbol];
@@ -357,7 +363,12 @@ export default function Dashboard() {
         ) : (
           <div className="space-y-2">
             {activityRows.map((a) => (
-              <div key={a.id} className="flex items-center justify-between p-4 rounded-lg border hover:shadow-sm transition-all">
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setSelectedActivityId(a.id)}
+                className="w-full text-left flex items-center justify-between p-4 rounded-lg border hover:shadow-sm transition-all"
+              >
                 <div className="flex items-center gap-3">
                   <div className={`h-9 w-9 rounded-full flex items-center justify-center ${
                     a.type === "deposit" ? "bg-buy/10" : a.type === "withdrawal" ? "bg-sell/10" : "bg-muted"
@@ -377,7 +388,7 @@ export default function Dashboard() {
                   <p className="font-mono text-sm font-medium">{a.valueText}</p>
                   <p className="text-xs text-muted-foreground font-mono">{a.amountText}</p>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -402,6 +413,53 @@ export default function Dashboard() {
           </Button>
         </Link>
       </div>
+
+      <Dialog open={!!selectedActivity} onOpenChange={(open) => !open && setSelectedActivityId(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Transaction Receipt</DialogTitle>
+            <DialogDescription>
+              {selectedActivity ? `${selectedActivity.label} ${selectedActivity.asset}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedActivity && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Amount</p>
+                  <p className="font-mono">{selectedActivity.amountText}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Value</p>
+                  <p className="font-mono">{selectedActivity.valueText}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Network</p>
+                  <p>{selectedActivity.chain}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Time</p>
+                  <p>{new Date(selectedActivity.createdAt).toLocaleString()}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Receipt Number</p>
+                <p className="font-mono break-all">{selectedActivity.receiptNo ?? "Pending migration / unavailable"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Transaction ID</p>
+                <p className="font-mono break-all">{selectedActivity.id}</p>
+              </div>
+              {selectedActivity.description && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Note</p>
+                  <p>{selectedActivity.description}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
