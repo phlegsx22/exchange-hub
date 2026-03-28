@@ -31,10 +31,14 @@ const DEFAULT_POLL_MS = Number(process.env.CHAIN_POLL_INTERVAL_MS ?? 60000);
 const BTC_API_BASE = process.env.BTC_API_BASE ?? "https://blockstream.info/api";
 const TRON_GRID_API_BASE = process.env.TRON_GRID_API_BASE ?? "https://api.trongrid.io";
 const TRON_PRO_API_KEY = process.env.TRON_PRO_API_KEY ?? "";
-const SOLANA_RPC_URLS = (process.env.SOLANA_RPC_URLS ?? "https://api.mainnet-beta.solana.com")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+const SOLANA_RPC_URLS = Array.from(
+  new Set(
+    `${process.env.SOLANA_RPC_URLS ?? ""},https://api.mainnet-beta.solana.com`
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  )
+);
 const CONTRACT_FALLBACKS: Record<string, string> = {
   "USDT:ethereum": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
   "USDC:ethereum": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
@@ -95,6 +99,7 @@ function getProvider(chainSlug: string): JsonRpcProvider | null {
 
 async function getBitcoinBalanceAtomic(address: string): Promise<bigint> {
   const res = await fetch(`${BTC_API_BASE}/address/${encodeURIComponent(address)}`);
+  if (res.status === 400) return 0n;
   if (!res.ok) throw new Error(`BTC API error: ${res.status}`);
   const data = (await res.json()) as {
     chain_stats?: { funded_txo_sum?: number; spent_txo_sum?: number };
@@ -265,8 +270,38 @@ function resolveContractAddress(row: AddressRow): string | null {
   return CONTRACT_FALLBACKS[key] ?? null;
 }
 
+function isProbablyEvmHexAddress(v: string): boolean {
+  return /^0x[0-9a-fA-F]{40}$/.test(v.trim());
+}
+
+function isValidOwnerAddressForChain(chainSlug: string, address: string): boolean {
+  const v = address.trim();
+  if (!v) return false;
+  if (chainSlug === "ethereum" || chainSlug === "bsc" || chainSlug === "base" || chainSlug === "arbitrum") {
+    return isProbablyEvmHexAddress(v);
+  }
+  if (chainSlug === "bitcoin") {
+    // pragmatic validation to skip obvious bad seeds while accepting common formats
+    return /^(bc1|tb1|[13mn2])[a-zA-Z0-9]{20,}$/.test(v);
+  }
+  if (chainSlug === "tron") return /^T[1-9A-HJ-NP-Za-km-z]{25,34}$/.test(v);
+  if (chainSlug === "solana") return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v);
+  return true;
+}
+
+function normalizeContractAddressForChain(chainSlug: string, contractAddress: string | null): string | null {
+  if (!contractAddress) return null;
+  const v = contractAddress.trim();
+  if (!v) return null;
+  if (chainSlug === "ethereum" || chainSlug === "bsc" || chainSlug === "base" || chainSlug === "arbitrum") {
+    return isProbablyEvmHexAddress(v) ? v : null;
+  }
+  return v;
+}
+
 async function getOnchainBalanceAtomic(row: AddressRow): Promise<{ balanceAtomic: bigint; decimals: number } | null> {
-  const contractAddress = resolveContractAddress(row);
+  if (!isValidOwnerAddressForChain(row.chainSlug, row.address)) return null;
+  const contractAddress = normalizeContractAddressForChain(row.chainSlug, resolveContractAddress(row));
   // Safety: do NOT treat native chain balance as token balance.
   // If an asset is non-native, it must have a contract address for polling.
   if (!row.assetIsNative && !contractAddress) {
@@ -295,7 +330,17 @@ async function getOnchainBalanceAtomic(row: AddressRow): Promise<{ balanceAtomic
   }
 
   const token = new Contract(contractAddress, ERC20_ABI, provider);
-  const bal = (await token.balanceOf(row.address)) as bigint;
+  let bal: bigint;
+  try {
+    bal = (await token.balanceOf(row.address)) as bigint;
+  } catch (err) {
+    const code = (err as { code?: string })?.code ?? "";
+    // Invalid contract/address rows should not fail the whole poll cycle.
+    if (code === "BAD_DATA" || code === "BUFFER_OVERRUN" || code === "UNCONFIGURED_NAME") {
+      return null;
+    }
+    throw err;
+  }
   const decimals = await getTokenDecimals(
     {
       ...row,

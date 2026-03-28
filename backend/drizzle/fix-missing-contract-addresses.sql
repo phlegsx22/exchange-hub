@@ -1,4 +1,4 @@
--- Fix asset_networks rows that were created without contract addresses.
+-- Fix asset_networks rows that were created with missing OR wrong contract addresses.
 -- These values must match the SEED_ASSET_NETWORKS presets in admin.ts.
 
 UPDATE asset_networks
@@ -24,4 +24,7 @@ JOIN assets a ON a.symbol = sub.asset_symbol
 JOIN chains c ON c.slug = sub.chain_slug
 WHERE asset_networks.asset_id = a.id
   AND asset_networks.chain_id = c.id
-  AND asset_networks.contract_address IS NULL;
+  AND (
+    asset_networks.contract_address IS NULL
+    OR LOWER(asset_networks.contract_address) <> LOWER(sub.contract_address)
+  );
