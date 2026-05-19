@@ -604,6 +604,7 @@ export default function AdminUsers() {
                 onClick={() => {
                   setBalanceUser(selectedUser);
                   setBalanceForm({ assetSymbol: "PAXG", chainSlug: "ethereum", amount: "", note: "" });
+                  setSelectedUser(null);
                 }}
               >
                 <Wallet className="h-3.5 w-3.5 mr-1.5" />
@@ -892,7 +893,7 @@ export default function AdminUsers() {
             <Button variant="outline" onClick={() => setBalanceUser(null)}>Cancel</Button>
             <Button onClick={() => void saveBalanceAdjustment()} disabled={adjustingBalance}>
               {adjustingBalance && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-              Save balance
+              Update balance
             </Button>
           </DialogFooter>
         </DialogContent>

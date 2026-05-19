@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Shield, Zap, Users, Lock, ArrowRight, ShieldCheck, Globe, Gift } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Shield, Zap, Users, Lock, ArrowRight, ShieldCheck, Globe } from "lucide-react";
+import { useState } from "react";
 import logoImg from "@/assets/logo.png";
 import { registerFormSchema } from "@/lib/validation";
 import { api } from "@/lib/api";
@@ -16,28 +16,11 @@ const stats = [
   { icon: Lock, label: "$350M insurance fund" },
 ];
 
-const liveTrades = [
-  "User ***42 just bought 0.5 BTC",
-  "User ***87 just sold 12 ETH",
-  "User ***15 just deposited 5,000 USDT",
-  "User ***63 just bought 200 SOL",
-  "User ***29 just earned $142 in rewards",
-  "User ***51 just registered & got $100 bonus",
-];
-
 export default function Register() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [tradeIdx, setTradeIdx] = useState(0);
-  const [onlineCount, setOnlineCount] = useState(48293);
-
-  useEffect(() => {
-    const t1 = setInterval(() => setTradeIdx(prev => (prev + 1) % liveTrades.length), 3000);
-    const t2 = setInterval(() => setOnlineCount(prev => prev + Math.floor((Math.random() - 0.45) * 30)), 4000);
-    return () => { clearInterval(t1); clearInterval(t2); };
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,12 +70,12 @@ export default function Register() {
             <img src={logoImg} alt="Annex-Ebank" className="h-7 w-7" />
             Annex-Ebank
           </div>
-          <p className="text-background/60 text-sm">The world's leading crypto exchange</p>
+          <p className="text-background/60 text-sm">Secure asset management for verified accounts</p>
         </div>
         <div className="relative space-y-8">
           <div>
-            <h2 className="text-3xl font-bold leading-tight mb-3">Start trading in<br />under 60 seconds</h2>
-            <p className="text-background/60 text-sm max-w-sm">Join millions of traders worldwide. Get $100 in trading bonus when you sign up today.</p>
+            <h2 className="text-3xl font-bold leading-tight mb-3">Create your<br />asset account</h2>
+            <p className="text-background/60 text-sm max-w-sm">Manage PAX Gold, crypto assets, and mobile transfers after verification.</p>
           </div>
           <div className="space-y-3">
             {stats.map((s, i) => (
@@ -113,17 +96,13 @@ export default function Register() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-buy" />
               </span>
-              Live Activity
+              Account Activity
             </div>
-            <p className="text-sm text-background/80 animate-[fade-in_0.5s_ease-out]" key={tradeIdx}>
-              {liveTrades[tradeIdx]}
+            <p className="text-sm text-background/80">
+              Your deposits, withdrawals, and transfers will appear after your account is active.
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs text-background/40">
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-1.5 w-1.5"><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-buy" /></span>
-              {onlineCount.toLocaleString()} online
-            </div>
             <div className="flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> All systems operational</div>
           </div>
         </div>
@@ -139,9 +118,6 @@ export default function Register() {
             </div>
             <h1 className="text-2xl font-bold">Create your account</h1>
             <p className="text-muted-foreground mt-1">Start trading in minutes</p>
-            <div className="inline-flex items-center gap-1.5 mt-3 rounded-full border border-warning/30 bg-warning/5 px-3 py-1 text-xs text-warning">
-              <Gift className="h-3 w-3" /> Get $100 bonus on sign up
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

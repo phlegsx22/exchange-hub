@@ -3,11 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ArrowUpRight, ArrowDownRight, Wallet, Send, ArrowLeftRight, TrendingUp,
-  Eye, EyeOff, PieChart, Bell, Shield, ShieldCheck, Clock, Activity,
-  Zap, ChevronRight, Flame, Star, BarChart3, Copy, FileCheck2
+  Eye, EyeOff, PieChart, Shield, ShieldCheck, Clock, Activity,
+  Zap, ChevronRight, FileCheck2
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
-import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { DEFAULT_WATCHLIST, TOKENS } from "@/lib/tokens";
 import { TokenIcon } from "@/components/TokenIcon";
 import { useBinanceTickers } from "@/hooks/useBinanceTickers";
@@ -15,17 +14,6 @@ import { useUserBalances } from "@/hooks/useUserBalances";
 import { useRecentActivity } from "@/hooks/useRecentActivity";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
-
-const portfolioChart = Array.from({ length: 30 }, (_, i) => ({
-  day: i,
-  value: 88000 + Math.sin(i * 0.3) * 3000 + i * 250 + Math.random() * 1500,
-}));
-
-const notifications = [
-  { text: "BTC up 2.34% in the last 24h", time: "5m ago", type: "price" },
-  { text: "Your limit order for ETH was filled", time: "2h ago", type: "order" },
-  { text: "Security: New login from Chrome on Mac", time: "1d ago", type: "security" },
-];
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -122,14 +110,8 @@ export default function Dashboard() {
     }, 0);
   }, [demoTradingBalances, tickers]);
   const fundingAvailableEstimate = Math.max(totalValue - tradingValue, 0);
-  const [onlineCount, setOnlineCount] = useState(48293);
   const isKycApproved = user?.kycStatus === "approved";
   const kycStatus = (user?.kycStatus ?? "none").replace("_", " ");
-
-  useEffect(() => {
-    const t2 = setInterval(() => setOnlineCount(prev => prev + Math.floor((Math.random() - 0.45) * 30)), 5000);
-    return () => { clearInterval(t2); };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,13 +152,6 @@ export default function Dashboard() {
             <p className="text-buy text-sm font-medium font-mono flex items-center gap-1">
               <ArrowUpRight className="h-3.5 w-3.5" /> {totalValue === 0 ? "$0.00 (0.00%) today" : "—"}
             </p>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-buy" />
-              </span>
-              {onlineCount.toLocaleString()} traders online
-            </div>
           </div>
         </div>
         <div className="hidden md:flex items-center gap-2">
@@ -188,7 +163,6 @@ export default function Dashboard() {
               <Shield className="h-3.5 w-3.5" /> 2FA
             </Button>
           </Link>
-          <Button variant="outline" size="sm" className="gap-1.5"><Bell className="h-3.5 w-3.5" /> Alerts</Button>
         </div>
       </div>
 
@@ -214,27 +188,33 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Portfolio Chart + Quick Actions */}
+      {/* Portfolio Summary + Quick Actions */}
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 rounded-lg border bg-card p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">Portfolio Performance (30d)</h3>
+            <h3 className="font-semibold text-sm">Portfolio Snapshot</h3>
             <div className="flex items-center gap-1 text-xs text-buy">
-              <TrendingUp className="h-3 w-3" /> +8.2%
+              <TrendingUp className="h-3 w-3" /> Live prices
             </div>
           </div>
-          <div className="h-40">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={portfolioChart}>
-                <defs>
-                  <linearGradient id="portfolioGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(142,71%,45%)" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="hsl(142,71%,45%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area type="monotone" dataKey="value" stroke="hsl(142,71%,45%)" fill="url(#portfolioGrad)" strokeWidth={2} dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {holdings.rows.slice(0, 3).map((asset) => (
+              <div key={asset.symbol} className="rounded-lg border bg-background p-3">
+                <div className="flex items-center gap-2">
+                  <TokenIcon symbol={asset.symbol} size={24} />
+                  <div>
+                    <p className="text-sm font-semibold">{asset.symbol}</p>
+                    <p className="text-xs text-muted-foreground">{asset.name}</p>
+                  </div>
+                </div>
+                <p className="mt-3 font-mono text-sm">
+                  {showBalances ? asset.balance.toLocaleString(undefined, { maximumFractionDigits: 8 }) : "****"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {showBalances ? `$${asset.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "****"}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -282,27 +262,6 @@ export default function Dashboard() {
                 </div>
               </Link>
             ))}
-          </div>
-          {/* Notifications */}
-          <div className="rounded-lg border bg-card p-3">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Bell className="h-3.5 w-3.5" />
-              <span className="text-xs font-semibold">Notifications</span>
-              <span className="ml-auto h-4 w-4 rounded-full bg-sell text-background text-[10px] font-bold flex items-center justify-center">3</span>
-            </div>
-            <div className="space-y-2">
-              {notifications.map((n, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <div className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${
-                    n.type === "price" ? "bg-buy" : n.type === "order" ? "bg-warning" : "bg-sell"
-                  }`} />
-                  <div className="min-w-0">
-                    <p className="line-clamp-1">{n.text}</p>
-                    <p className="text-muted-foreground">{n.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
           {!isKycApproved && (
             <div className="rounded-lg border bg-card p-3">

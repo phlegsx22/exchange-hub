@@ -4,16 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Lock, ArrowRight, ShieldCheck, Fingerprint, Eye, EyeOff } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-
-const liveTrades = [
-  "User ***42 just bought 0.5 BTC",
-  "User ***87 just sold 12 ETH",
-  "User ***15 just deposited 5,000 USDT",
-  "User ***63 just bought 200 SOL",
-];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -23,14 +16,6 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [tradeIdx, setTradeIdx] = useState(0);
-  const [onlineCount, setOnlineCount] = useState(48293);
-
-  useEffect(() => {
-    const t1 = setInterval(() => setTradeIdx(prev => (prev + 1) % liveTrades.length), 3000);
-    const t2 = setInterval(() => setOnlineCount(prev => prev + Math.floor((Math.random() - 0.45) * 30)), 4000);
-    return () => { clearInterval(t1); clearInterval(t2); };
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,17 +53,17 @@ export default function Login() {
             <img src={logo} alt="Annex-Ebank" className="h-7 w-7" />
             Annex-Ebank
           </div>
-          <p className="text-background/60 text-sm">The world's leading crypto exchange</p>
+          <p className="text-background/60 text-sm">Secure asset management for verified accounts</p>
         </div>
         <div className="relative space-y-6">
           <h2 className="text-3xl font-bold leading-tight">Welcome back,<br />trader.</h2>
-          <p className="text-background/60 text-sm max-w-sm">Access your portfolio, trade 350+ assets, and manage your crypto — all in one place.</p>
+          <p className="text-background/60 text-sm max-w-sm">Access your PAX Gold, crypto assets, and mobile transfer tools from one account.</p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { value: "$2.4B+", label: "24h Volume" },
-              { value: "99.99%", label: "Uptime" },
-              { value: "350+", label: "Trading pairs" },
-              { value: "<30s", label: "Avg support" },
+              { value: "PAXG", label: "Gold-backed assets" },
+              { value: "Crypto", label: "Admin-credited balances" },
+              { value: "KYC", label: "Verified access" },
+              { value: "24/7", label: "Account visibility" },
             ].map((s, i) => (
               <div key={i} className="rounded-lg bg-background/5 border border-background/10 p-3">
                 <p className="font-mono font-bold text-lg">{s.value}</p>
@@ -94,17 +79,13 @@ export default function Login() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-buy opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-buy" />
               </span>
-              Live Activity
+              Account Activity
             </div>
-            <p className="text-sm text-background/80 animate-[fade-in_0.5s_ease-out]" key={tradeIdx}>
-              {liveTrades[tradeIdx]}
+            <p className="text-sm text-background/80">
+              Your deposits, withdrawals, and transfers will appear after you sign in.
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs text-background/40">
-            <div className="flex items-center gap-1.5">
-              <span className="relative flex h-1.5 w-1.5"><span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-buy" /></span>
-              {onlineCount.toLocaleString()} online
-            </div>
             <div className="flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> All systems operational</div>
           </div>
         </div>
