@@ -14,7 +14,8 @@ export type TokenSymbol =
   | "LINK"
   | "DOT"
   | "MATIC"
-  | "UNI";
+  | "UNI"
+  | "PAXG";
 
 export interface TokenMeta {
   symbol: TokenSymbol;
@@ -142,6 +143,13 @@ export const TOKENS: Record<TokenSymbol, TokenMeta> = {
     iconUrl:
       "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984/logo.png",
   },
+  PAXG: {
+    symbol: "PAXG",
+    name: "PAX Gold",
+    binanceUsdtPair: "paxgusdt",
+    iconUrl:
+      "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x45804880De22913dAFE09f4980848ECE6EcbAf78/logo.png",
+  },
 };
 
 export const DEFAULT_WATCHLIST: TokenSymbol[] = [
@@ -153,4 +161,3 @@ export const DEFAULT_WATCHLIST: TokenSymbol[] = [
   "ADA",
   "DOGE",
 ];
-

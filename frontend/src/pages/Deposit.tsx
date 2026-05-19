@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,6 +16,7 @@ const TOKEN_ICON_BY_SYMBOL: Record<string, string> = {
   USDC: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
   TRX: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png",
   ARB: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/assets/0x912CE59144191C1204E64559FE8253a0e49E6548/logo.png",
+  PAXG: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x45804880De22913dAFE09f4980848ECE6EcbAf78/logo.png",
 };
 
 const NETWORK_ICON_BY_SLUG: Record<string, string> = {
@@ -39,6 +41,7 @@ function CircleIcon({ src, alt, fallback }: { src?: string; alt: string; fallbac
 }
 
 export default function Deposit() {
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addresses, setAddresses] = useState<UserDepositAddress[]>([]);
@@ -77,8 +80,10 @@ export default function Deposit() {
   }, [supported]);
 
   useEffect(() => {
-    if (!asset && assets.length) setAsset(assets[0]);
-  }, [asset, assets]);
+    if (asset || !assets.length) return;
+    const requested = searchParams.get("asset")?.trim().toUpperCase();
+    setAsset(requested && assets.includes(requested) ? requested : assets[0]);
+  }, [asset, assets, searchParams]);
 
   const assetNetworks = useMemo(() => {
     return supported
@@ -215,4 +220,3 @@ export default function Deposit() {
     </div>
   );
 }
-

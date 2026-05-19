@@ -11,7 +11,10 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import VerifyEmail from "./pages/VerifyEmail";
 import KYC from "./pages/KYC";
+import AssetHub from "./pages/AssetHub";
 import Dashboard from "./pages/Dashboard";
+import PaxGoldDashboard from "./pages/PaxGoldDashboard";
+import MobileTransfers from "./pages/MobileTransfers";
 import Assets from "./pages/Assets";
 import AssetDetails from "./pages/AssetDetails";
 import Deposit from "./pages/Deposit";
@@ -129,7 +132,31 @@ const App = () => (
                 path="/dashboard"
                 element={
                   <RequireVerified>
+                    <AssetHub />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/crypto-assets"
+                element={
+                  <RequireVerified>
                     <Dashboard />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/pax-gold"
+                element={
+                  <RequireVerified>
+                    <PaxGoldDashboard />
+                  </RequireVerified>
+                }
+              />
+              <Route
+                path="/mobile-transfers"
+                element={
+                  <RequireVerified>
+                    <MobileTransfers />
                   </RequireVerified>
                 }
               />

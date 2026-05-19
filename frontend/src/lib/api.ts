@@ -609,6 +609,33 @@ export const api = {
     return handleResponse<{ ok: true; user: AdminUserRow }>(res);
   },
 
+  async adminAdjustUserBalance(
+    userId: string,
+    body: { assetSymbol: string; chainSlug?: string; amount: number; note?: string }
+  ) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/admin/users/${encodeURIComponent(userId)}/balance-adjustments`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new Error(NETWORK_ERROR_MESSAGE);
+    }
+    return handleResponse<{
+      ok: true;
+      userId: string;
+      assetSymbol: string;
+      chainSlug: string;
+      amount: number;
+      balance: number;
+      receiptNo: string | null;
+      ledgerEntryId: string | null;
+      createdAt: string;
+    }>(res);
+  },
+
   async adminKycSubmissions(params?: {
     status?: "pending" | "under_review" | "approved" | "rejected";
     q?: string;

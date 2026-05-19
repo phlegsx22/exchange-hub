@@ -36,6 +36,16 @@ const kycColors: Record<string, string> = {
   not_started: "bg-muted text-muted-foreground",
 };
 
+const DEFAULT_BALANCE_NETWORK: Record<string, string> = {
+  BTC: "bitcoin",
+  ETH: "ethereum",
+  USDT: "ethereum",
+  USDC: "ethereum",
+  PAXG: "ethereum",
+  SOL: "solana",
+  BNB: "bsc",
+};
+
 type AdminUser = {
   id: string;
   name: string;
@@ -77,6 +87,14 @@ export default function AdminUsers() {
   const [seedAddressInputs, setSeedAddressInputs] = useState<Record<string, { address: string; memo: string }>>({});
   const [loadingSeedNetworks, setLoadingSeedNetworks] = useState(false);
   const [deleteUserTarget, setDeleteUserTarget] = useState<AdminUser | null>(null);
+  const [balanceUser, setBalanceUser] = useState<AdminUser | null>(null);
+  const [balanceForm, setBalanceForm] = useState({
+    assetSymbol: "PAXG",
+    chainSlug: "ethereum",
+    amount: "",
+    note: "",
+  });
+  const [adjustingBalance, setAdjustingBalance] = useState(false);
 
   const totalUsers = users.length;
 
@@ -138,7 +156,7 @@ export default function AdminUsers() {
         throw new Error("No KYC submission found for this user.");
       }
 
-      let rejectionReason: string | undefined = opts?.rejectionReason;
+      const rejectionReason: string | undefined = opts?.rejectionReason;
       if (decision === "rejected" && !rejectionReason?.trim()) {
         throw new Error("Rejection reason is required.");
       }
@@ -225,6 +243,33 @@ export default function AdminUsers() {
       setError(err instanceof Error ? err.message : "Failed to save deposit addresses");
     } finally {
       setSeedingUserId(null);
+    }
+  }
+
+  async function saveBalanceAdjustment() {
+    if (!balanceUser) return;
+    const amount = Number(balanceForm.amount);
+    if (!Number.isFinite(amount) || amount === 0) {
+      setError("Enter a non-zero amount.");
+      return;
+    }
+
+    setAdjustingBalance(true);
+    setError(null);
+    try {
+      await api.adminAdjustUserBalance(balanceUser.id, {
+        assetSymbol: balanceForm.assetSymbol,
+        chainSlug: balanceForm.chainSlug || "ethereum",
+        amount,
+        note: balanceForm.note.trim() || undefined,
+      });
+      setBalanceUser(null);
+      setBalanceForm({ assetSymbol: "PAXG", chainSlug: "ethereum", amount: "", note: "" });
+      await loadUsers();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to update balance");
+    } finally {
+      setAdjustingBalance(false);
     }
   }
 
@@ -387,6 +432,15 @@ export default function AdminUsers() {
                           <Eye className="h-3.5 w-3.5 mr-2" /> View Details
                         </DropdownMenuItem>
                         <DropdownMenuItem><Mail className="h-3.5 w-3.5 mr-2" /> Send Email</DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBalanceUser(user);
+                            setBalanceForm({ assetSymbol: "PAXG", chainSlug: "ethereum", amount: "", note: "" });
+                          }}
+                        >
+                          <Wallet className="h-3.5 w-3.5 mr-2" /> Update balance
+                        </DropdownMenuItem>
                         {user.kycStatus !== "verified" && (
                           <DropdownMenuItem
                             onClick={(e) => {
@@ -544,6 +598,17 @@ export default function AdminUsers() {
                   Seed Addresses
                 </Button>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setBalanceUser(selectedUser);
+                  setBalanceForm({ assetSymbol: "PAXG", chainSlug: "ethereum", amount: "", note: "" });
+                }}
+              >
+                <Wallet className="h-3.5 w-3.5 mr-1.5" />
+                Update Balance
+              </Button>
               {selectedUser.status !== "blacklisted" ? (
                 <Button variant="destructive" size="sm" onClick={() => { changeStatus(selectedUser.id, "blacklisted"); setSelectedUser(null); }}>
                   <Ban className="h-3.5 w-3.5 mr-1.5" /> Blacklist User
@@ -745,6 +810,89 @@ export default function AdminUsers() {
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" />
               )}
               Delete user
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual balance adjustment dialog */}
+      <Dialog open={!!balanceUser} onOpenChange={(open) => !open && setBalanceUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update User Balance</DialogTitle>
+            <DialogDescription>
+              {balanceUser ? `Credit or adjust balances for ${balanceUser.name}. Positive PAXG/crypto amounts appear as deposits.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Asset</Label>
+                <Select
+                  value={balanceForm.assetSymbol}
+                  onValueChange={(assetSymbol) =>
+                    setBalanceForm((prev) => ({
+                      ...prev,
+                      assetSymbol,
+                      chainSlug: DEFAULT_BALANCE_NETWORK[assetSymbol] ?? prev.chainSlug,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["PAXG", "BTC", "ETH", "USDT", "USDC", "SOL", "BNB"].map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Network</Label>
+                <Select
+                  value={balanceForm.chainSlug}
+                  onValueChange={(chainSlug) => setBalanceForm((prev) => ({ ...prev, chainSlug }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ethereum">Ethereum</SelectItem>
+                    <SelectItem value="bitcoin">Bitcoin</SelectItem>
+                    <SelectItem value="solana">Solana</SelectItem>
+                    <SelectItem value="bsc">BNB Smart Chain</SelectItem>
+                    <SelectItem value="base">Base</SelectItem>
+                    <SelectItem value="arbitrum">Arbitrum</SelectItem>
+                    <SelectItem value="tron">Tron</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                step="any"
+                placeholder="0.00"
+                value={balanceForm.amount}
+                onChange={(e) => setBalanceForm((prev) => ({ ...prev, amount: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Note</Label>
+              <Textarea
+                placeholder="Deposit confirmed by admin"
+                value={balanceForm.note}
+                onChange={(e) => setBalanceForm((prev) => ({ ...prev, note: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBalanceUser(null)}>Cancel</Button>
+            <Button onClick={() => void saveBalanceAdjustment()} disabled={adjustingBalance}>
+              {adjustingBalance && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              Save balance
             </Button>
           </DialogFooter>
         </DialogContent>
