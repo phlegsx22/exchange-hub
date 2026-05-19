@@ -65,9 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(response.user);
       setAccessToken(stored.accessToken);
       setStatus("authenticated");
-    } catch (error) {
+    } catch {
       // Token is invalid or expired - clear everything
-      console.warn("Session validation failed:", error);
       clearStoredAuth();
       setUser(null);
       setAccessToken(null);

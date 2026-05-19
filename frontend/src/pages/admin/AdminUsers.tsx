@@ -531,19 +531,36 @@ export default function AdminUsers() {
       {/* User Detail Dialog */}
       {selectedUser && (
         <Dialog open={!!selectedUser} onOpenChange={() => setSelectedUser(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{selectedUser.name}</DialogTitle>
-              <DialogDescription>{selectedUser.email} · {selectedUser.id}</DialogDescription>
+              <DialogTitle className="break-words pr-6">{selectedUser.name}</DialogTitle>
+              <DialogDescription className="break-all">
+                {selectedUser.email} · {selectedUser.id}
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><p className="text-muted-foreground text-xs">Status</p><Badge variant="outline" className={statusColors[selectedUser.status]}>{selectedUser.status}</Badge></div>
-                <div><p className="text-muted-foreground text-xs">KYC</p><Badge variant="outline" className={kycColors[selectedUser.kycStatus]}>{selectedUser.kycStatus}</Badge></div>
-                <div><p className="text-muted-foreground text-xs">Balance</p><p className="font-mono font-medium">${selectedUser.totalBalance.toLocaleString()}</p></div>
-                <div><p className="text-muted-foreground text-xs">Country</p><p className="font-medium">{selectedUser.country}</p></div>
-                <div><p className="text-muted-foreground text-xs">Joined</p><p>{selectedUser.joinDate}</p></div>
-                <div><p className="text-muted-foreground text-xs">Risk Score</p>
+              <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                <div className="min-w-0 rounded-md border bg-background p-3">
+                  <p className="text-muted-foreground text-xs">Status</p>
+                  <Badge variant="outline" className={statusColors[selectedUser.status]}>{selectedUser.status}</Badge>
+                </div>
+                <div className="min-w-0 rounded-md border bg-background p-3">
+                  <p className="text-muted-foreground text-xs">KYC</p>
+                  <Badge variant="outline" className={kycColors[selectedUser.kycStatus]}>{selectedUser.kycStatus}</Badge>
+                </div>
+                <div className="min-w-0 rounded-md border bg-background p-3">
+                  <p className="text-muted-foreground text-xs">Balance</p>
+                  <p className="break-words font-mono font-medium">${selectedUser.totalBalance.toLocaleString()}</p>
+                </div>
+                <div className="min-w-0 rounded-md border bg-background p-3">
+                  <p className="text-muted-foreground text-xs">Country</p>
+                  <p className="break-words font-medium">{selectedUser.country}</p>
+                </div>
+                <div className="min-w-0 rounded-md border bg-background p-3">
+                  <p className="text-muted-foreground text-xs">Joined</p>
+                  <p className="break-words">{selectedUser.joinDate}</p>
+                </div>
+                <div className="min-w-0 rounded-md border bg-background p-3"><p className="text-muted-foreground text-xs">Risk Score</p>
                   <div className="flex items-center gap-1.5">
                     <div className={`h-2 w-2 rounded-full ${selectedUser.riskScore > 70 ? "bg-sell" : selectedUser.riskScore > 40 ? "bg-warning" : "bg-buy"}`} />
                     <span className="font-mono">{selectedUser.riskScore}/100</span>
@@ -552,11 +569,12 @@ export default function AdminUsers() {
               </div>
               <div className="border-t pt-3">
                 <p className="text-xs font-medium mb-3">Feature Access</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {(Object.keys(selectedUser.features) as (keyof AdminUser["features"])[]).map(feat => (
-                    <div key={feat} className="flex items-center justify-between">
-                      <Label className="text-sm capitalize">{feat}</Label>
+                    <div key={feat} className="flex min-w-0 items-center justify-between gap-3 rounded-md border bg-background px-3 py-2">
+                      <Label className="min-w-0 truncate text-sm capitalize">{feat}</Label>
                       <Switch
+                        className="shrink-0"
                         checked={users.find(u => u.id === selectedUser.id)?.features[feat]}
                         onCheckedChange={() => toggleFeature(selectedUser.id, feat)}
                       />
@@ -565,11 +583,12 @@ export default function AdminUsers() {
                 </div>
               </div>
             </div>
-            <DialogFooter className="gap-2">
+            <DialogFooter className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {selectedUser.kycStatus !== "verified" && (
                 <Button
                   variant="outline"
                   size="sm"
+                  className="w-full justify-center"
                   onClick={() => void quickReviewKyc(selectedUser, "approved")}
                   disabled={processingKycUserId === selectedUser.id || seedingUserId === selectedUser.id}
                 >
@@ -585,6 +604,7 @@ export default function AdminUsers() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="w-full justify-center"
                   onClick={() => {
                     void openManualSeedDialog(selectedUser);
                   }}
@@ -601,6 +621,7 @@ export default function AdminUsers() {
               <Button
                 variant="outline"
                 size="sm"
+                className="w-full justify-center"
                 onClick={() => {
                   setBalanceUser(selectedUser);
                   setBalanceForm({ assetSymbol: "PAXG", chainSlug: "ethereum", amount: "", note: "" });
@@ -611,17 +632,18 @@ export default function AdminUsers() {
                 Update Balance
               </Button>
               {selectedUser.status !== "blacklisted" ? (
-                <Button variant="destructive" size="sm" onClick={() => { changeStatus(selectedUser.id, "blacklisted"); setSelectedUser(null); }}>
+                <Button className="w-full justify-center" variant="destructive" size="sm" onClick={() => { changeStatus(selectedUser.id, "blacklisted"); setSelectedUser(null); }}>
                   <Ban className="h-3.5 w-3.5 mr-1.5" /> Blacklist User
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => { changeStatus(selectedUser.id, "active"); setSelectedUser(null); }}>
+                <Button className="w-full justify-center" variant="outline" size="sm" onClick={() => { changeStatus(selectedUser.id, "active"); setSelectedUser(null); }}>
                   <ShieldCheck className="h-3.5 w-3.5 mr-1.5" /> Remove from Blacklist
                 </Button>
               )}
               <Button
                 variant="destructive"
                 size="sm"
+                className="w-full justify-center"
                 onClick={() => setDeleteUserTarget(selectedUser)}
                 disabled={deletingUserId === selectedUser.id}
               >

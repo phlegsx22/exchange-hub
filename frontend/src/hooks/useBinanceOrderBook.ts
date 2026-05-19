@@ -77,7 +77,9 @@ export function useBinanceOrderBook(symbol: string, depth = 7) {
         snapshotLoaded.current = true;
         processBuffer();
       })
-      .catch(console.error);
+      .catch(() => {
+        snapshotLoaded.current = false;
+      });
 
     // Connect WebSocket with 100ms updates
     const ws = new WebSocket(`wss://stream.binance.com:9443/ws/${pair}@depth@100ms`);
