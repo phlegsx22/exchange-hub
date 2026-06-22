@@ -60,7 +60,7 @@ export async function sendVerificationEmail(
 
   if (!apiKey) {
     // Dev fallback: keep things moving if key isn't set yet.
-    console.log("[Email] RESEND_API_KEY missing; verification link:", verificationLink);
+    console.log("[Email] RESEND_API_KEY missing; verification email skipped");
     return;
   }
 
@@ -85,7 +85,7 @@ export async function sendPasswordResetEmail(
     "no-reply@annex-ebank.com";
 
   if (!apiKey) {
-    console.log("[Email] RESEND_API_KEY missing; reset link:", resetLink);
+    console.log("[Email] RESEND_API_KEY missing; password reset email skipped");
     return;
   }
 
@@ -142,7 +142,7 @@ export async function sendAdminNotificationEmail(params: {
   const text = [params.title, ...params.lines.map((l) => `- ${l}`)].join("\n");
 
   if (!apiKey) {
-    console.log("[AdminNotify] RESEND_API_KEY missing; notification:", params.subject, params.lines.join(" | "));
+    console.log("[AdminNotify] RESEND_API_KEY missing; notification skipped:", params.subject);
     return;
   }
 

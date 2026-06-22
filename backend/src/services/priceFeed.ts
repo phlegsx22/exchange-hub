@@ -11,7 +11,19 @@ let ws: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
 let stopped = false;
 
-const DEFAULT_FEED_SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ARBUSDT", "USDTUSDT", "USDCUSDT"];
+const DEFAULT_FEED_SYMBOLS = [
+  "BTCUSDT",
+  "ETHUSDT",
+  "BNBUSDT",
+  "ARBUSDT",
+  "SOLUSDT",
+  "XRPUSDT",
+  "ADAUSDT",
+  "DOGEUSDT",
+  "PAXGUSDT",
+  "USDTUSDT",
+  "USDCUSDT",
+];
 const FEED_SYMBOLS = (process.env.PRICE_FEED_SYMBOLS ?? DEFAULT_FEED_SYMBOLS.join(","))
   .split(",")
   .map((s) => s.trim().toUpperCase())

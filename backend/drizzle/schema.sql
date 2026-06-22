@@ -18,6 +18,7 @@ CREATE TABLE "users" (
   "email" varchar(255) NOT NULL UNIQUE,
   "password_hash" varchar(255) NOT NULL,
   "name" varchar(255) NOT NULL,
+  "promotion_code" varchar(64),
   "role" "user_role" NOT NULL DEFAULT 'user',
   "account_status" "account_status" NOT NULL DEFAULT 'active',
   "email_verified" boolean NOT NULL DEFAULT false,

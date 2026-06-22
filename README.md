@@ -52,6 +52,32 @@ Set in `backend/.env`:
 DATABASE_URL=postgresql://...
 ```
 
+### Admin-managed balances
+
+Balances are ledger-managed. The backend does not auto-credit deposits from chain polling. Run the seed SQL below to make PAXG and common crypto asset-network rows available for admin credits:
+
+```sh
+# paste/run in Supabase SQL editor or your Postgres client
+backend/drizzle/manual-admin-balances.sql
+```
+
+Admin credit/update endpoint:
+
+```http
+POST /admin/users/:id/balance-adjustments
+Authorization: Bearer <admin_access_token>
+Content-Type: application/json
+
+{
+  "assetSymbol": "PAXG",
+  "chainSlug": "ethereum",
+  "amount": 0.25,
+  "note": "PAXG deposit confirmed"
+}
+```
+
+Positive amounts create a completed deposit record plus a ledger entry. Negative amounts create an admin adjustment and are rejected if they would make the selected asset/network balance negative.
+
 **Other GUIs** (connect with the same URL when going live):
 
 | Tool | Notes |

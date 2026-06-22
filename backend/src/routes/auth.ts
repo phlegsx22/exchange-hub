@@ -42,7 +42,7 @@ router.post("/register", async (req: Request, res: Response) => {
     res.status(400).json({ error: "Validation failed", issues: parsed.error.flatten() });
     return;
   }
-  const { email, password, name } = parsed.data;
+  const { email, password, name, promotionCode } = parsed.data;
 
   try {
     const [existing] = await db
@@ -62,11 +62,13 @@ router.post("/register", async (req: Request, res: Response) => {
         email: email.toLowerCase(),
         passwordHash,
         name: name.trim(),
+        promotionCode: promotionCode ?? null,
       })
       .returning({
         id: users.id,
         email: users.email,
         name: users.name,
+        promotionCode: users.promotionCode,
         emailVerified: users.emailVerified,
       });
 
@@ -96,6 +98,7 @@ router.post("/register", async (req: Request, res: Response) => {
         `User ID: ${user.id}`,
         `Name: ${user.name}`,
         `Email: ${user.email}`,
+        `Promotion code: ${user.promotionCode ?? "None"}`,
         `Registered at: ${new Date().toISOString()}`,
       ],
     });
@@ -106,6 +109,7 @@ router.post("/register", async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         name: user.name,
+        promotionCode: user.promotionCode,
         emailVerified: user.emailVerified,
       },
       message: "Verification email sent. Please check your inbox.",

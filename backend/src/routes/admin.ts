@@ -1,8 +1,10 @@
 import { Router, Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, ilike, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { requireAdmin, authMiddleware } from "../middleware/auth.js";
 import type { AuthRequest } from "../middleware/auth.js";
+import { getPriceUsd } from "../services/priceFeed.js";
 import {
   db,
   users,
@@ -48,6 +50,13 @@ const seedUserAddressesSchema = z.object({
   message: "At least one entry is required",
 });
 
+const adminBalanceAdjustmentSchema = z.object({
+  assetSymbol: z.string().trim().min(1).max(20).transform((v) => v.toUpperCase()),
+  chainSlug: z.string().trim().min(2).max(64).optional().default("ethereum"),
+  amount: z.coerce.number().finite().refine((v) => v !== 0, "Amount cannot be zero"),
+  note: z.string().trim().max(500).optional(),
+});
+
 type SeedChain = {
   slug: string;
   name: string;
@@ -88,6 +97,7 @@ const SEED_ASSETS: SeedAsset[] = [
   { symbol: "BNB", name: "BNB", decimals: 18, isNative: true },
   { symbol: "USDT", name: "Tether USD", decimals: 6, isNative: false },
   { symbol: "USDC", name: "USD Coin", decimals: 6, isNative: false },
+  { symbol: "PAXG", name: "PAX Gold", decimals: 18, isNative: false },
 ];
 
 // NOTE: Contract addresses are commonly-known defaults; verify before production.
@@ -104,6 +114,7 @@ const SEED_ASSET_NETWORKS: SeedAssetNetwork[] = [
   // USDT + USDC on Ethereum/Base/Arbitrum/BSC/Solana/Tron
   { assetSymbol: "USDT", chainSlug: "ethereum", contractAddress: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }, // ERC20
   { assetSymbol: "USDC", chainSlug: "ethereum", contractAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" },
+  { assetSymbol: "PAXG", chainSlug: "ethereum", contractAddress: "0x45804880De22913dAFE09f4980848ECE6EcbAf78" },
   { assetSymbol: "USDT", chainSlug: "base", contractAddress: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2" },
   { assetSymbol: "USDC", chainSlug: "base", contractAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
   { assetSymbol: "USDT", chainSlug: "arbitrum", contractAddress: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9" },
@@ -139,9 +150,21 @@ const DEFAULT_CHAIN_BY_SYMBOL: Record<string, { chainSlug: string; chainName: st
   SOL: { chainSlug: "solana", chainName: "Solana", nativeSymbol: "SOL", isEvm: false },
   XRP: { chainSlug: "ripple", chainName: "XRP Ledger", nativeSymbol: "XRP", isEvm: false },
   BNB: { chainSlug: "bsc", chainName: "BNB Smart Chain", nativeSymbol: "BNB", isEvm: true, chainId: 56 },
+  PAXG: {
+    chainSlug: "ethereum",
+    chainName: "Ethereum",
+    nativeSymbol: "ETH",
+    isEvm: true,
+    chainId: 1,
+    contractAddress: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",
+  },
   ADA: { chainSlug: "cardano", chainName: "Cardano", nativeSymbol: "ADA", isEvm: false },
   DOGE: { chainSlug: "dogecoin", chainName: "Dogecoin", nativeSymbol: "DOGE", isEvm: false },
 };
+
+function makeReceiptNo(prefix: "DPT" | "ADJ"): string {
+  return `${prefix}-${randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`;
+}
 
 async function ensureSeedPresetNetworkRows(chainSlugs: Set<string>): Promise<void> {
   const normalized = new Set(Array.from(chainSlugs).map((s) => s.trim().toLowerCase()));
@@ -222,6 +245,82 @@ async function ensureSeedPresetNetworkRows(chainSlugs: Set<string>): Promise<voi
   }
 }
 
+async function ensureAssetNetworkBySymbol(assetSymbol: string, chainSlug: string): Promise<string | null> {
+  const preset =
+    SEED_ASSET_NETWORKS.find((x) => x.assetSymbol === assetSymbol && x.chainSlug === chainSlug) ??
+    null;
+  const chainPreset =
+    SEED_CHAINS.find((x) => x.slug === chainSlug) ??
+    (DEFAULT_CHAIN_BY_SYMBOL[assetSymbol]?.chainSlug === chainSlug
+      ? {
+          slug: chainSlug,
+          name: DEFAULT_CHAIN_BY_SYMBOL[assetSymbol].chainName,
+          chainId: DEFAULT_CHAIN_BY_SYMBOL[assetSymbol].chainId ?? null,
+          nativeSymbol: DEFAULT_CHAIN_BY_SYMBOL[assetSymbol].nativeSymbol,
+          isEvm: DEFAULT_CHAIN_BY_SYMBOL[assetSymbol].isEvm,
+        }
+      : null);
+  const assetPreset = SEED_ASSETS.find((x) => x.symbol === assetSymbol) ?? null;
+
+  if (!chainPreset || !assetPreset) return null;
+
+  let chain = await db
+    .select({ id: chains.id })
+    .from(chains)
+    .where(eq(chains.slug, chainSlug))
+    .limit(1)
+    .then((r) => r[0]);
+  if (!chain) {
+    [chain] = await db
+      .insert(chains)
+      .values({
+        slug: chainPreset.slug,
+        name: chainPreset.name,
+        chainId: chainPreset.chainId,
+        nativeSymbol: chainPreset.nativeSymbol,
+        isEvm: chainPreset.isEvm,
+        isMainnet: true,
+      })
+      .returning({ id: chains.id });
+  }
+
+  let asset = await db
+    .select({ id: assets.id })
+    .from(assets)
+    .where(eq(assets.symbol, assetSymbol))
+    .limit(1)
+    .then((r) => r[0]);
+  if (!asset) {
+    [asset] = await db
+      .insert(assets)
+      .values({
+        symbol: assetPreset.symbol,
+        name: assetPreset.name,
+        decimals: assetPreset.decimals,
+        isNative: assetPreset.isNative,
+      })
+      .returning({ id: assets.id });
+  }
+
+  const existing = await db
+    .select({ id: assetNetworks.id })
+    .from(assetNetworks)
+    .where(and(eq(assetNetworks.assetId, asset.id), eq(assetNetworks.chainId, chain.id)))
+    .limit(1)
+    .then((r) => r[0]);
+  if (existing) return existing.id;
+
+  const [created] = await db
+    .insert(assetNetworks)
+    .values({
+      assetId: asset.id,
+      chainId: chain.id,
+      contractAddress: preset?.contractAddress ?? DEFAULT_CHAIN_BY_SYMBOL[assetSymbol]?.contractAddress ?? null,
+    })
+    .returning({ id: assetNetworks.id });
+  return created?.id ?? null;
+}
+
 function toAdminUserRow(u: {
   id: string;
   email: string;
@@ -236,6 +335,7 @@ function toAdminUserRow(u: {
   canMargin: boolean;
   canFutures: boolean;
   canStaking: boolean;
+  totalBalance?: number;
 }) {
   return {
     id: u.id,
@@ -250,7 +350,7 @@ function toAdminUserRow(u: {
           : u.kycStatus,
     joinDate: u.createdAt.toISOString().slice(0, 10),
     lastLogin: u.lastLoginAt ? `${u.lastLoginAt.toISOString()}` : "—",
-    totalBalance: 0,
+    totalBalance: u.totalBalance ?? 0,
     tradeCount: 0,
     country: "—",
     riskScore: 0,
@@ -263,6 +363,11 @@ function toAdminUserRow(u: {
       staking: u.canStaking,
     },
   };
+}
+
+function getAdminValuationPrice(symbol: string): number {
+  if (symbol === "USDT" || symbol === "USDC") return 1;
+  return getPriceUsd(symbol)?.priceUsd ?? 0;
 }
 
 const regularUsersWhere = eq(users.role, "user");
@@ -378,9 +483,32 @@ router.get(
         .where(where)
         .then((r) => r as unknown as { count: number }[]);
 
+      const userIds = rows.map((u) => u.id);
+      const totalByUser = new Map<string, number>();
+      if (userIds.length > 0) {
+        const balanceRows = await db
+          .select({
+            userId: ledgerEntries.userId,
+            symbol: assets.symbol,
+            balance: sql<string | null>`COALESCE(SUM(${ledgerEntries.amount}), 0)`,
+          })
+          .from(ledgerEntries)
+          .innerJoin(assetNetworks, eq(ledgerEntries.assetNetworkId, assetNetworks.id))
+          .innerJoin(assets, eq(assetNetworks.assetId, assets.id))
+          .where(inArray(ledgerEntries.userId, userIds))
+          .groupBy(ledgerEntries.userId, assets.symbol);
+
+        for (const row of balanceRows) {
+          const balance = Number(row.balance ?? 0);
+          const price = getAdminValuationPrice(row.symbol);
+          if (!Number.isFinite(balance) || !Number.isFinite(price) || price <= 0) continue;
+          totalByUser.set(row.userId, (totalByUser.get(row.userId) ?? 0) + balance * price);
+        }
+      }
+
       res.json({
         ok: true,
-        users: rows.map((u) => toAdminUserRow(u)),
+        users: rows.map((u) => toAdminUserRow({ ...u, totalBalance: totalByUser.get(u.id) ?? 0 })),
         total: Number(count ?? 0),
         limit,
         offset,
@@ -1491,6 +1619,106 @@ router.patch(
   }
 );
 
+router.post(
+  "/users/:id/balance-adjustments",
+  authMiddleware,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.params.id;
+    const parsed = adminBalanceAdjustmentSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Validation failed", issues: parsed.error.flatten(), code: "VALIDATION_FAILED" });
+      return;
+    }
+
+    const { assetSymbol, chainSlug, amount, note } = parsed.data;
+
+    try {
+      const [user] = await db
+        .select({ id: users.id, name: users.name, email: users.email, role: users.role })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!user || user.role !== "user") {
+        res.status(404).json({ error: "User not found", code: "NOT_FOUND" });
+        return;
+      }
+
+      const assetNetworkId = await ensureAssetNetworkBySymbol(assetSymbol, chainSlug);
+      if (!assetNetworkId) {
+        res.status(400).json({ error: "Unsupported asset/network for manual balance update", code: "VALIDATION_FAILED" });
+        return;
+      }
+
+      const [balRow] = await db
+        .select({ total: sql<string | null>`COALESCE(SUM(${ledgerEntries.amount}), 0)` })
+        .from(ledgerEntries)
+        .where(and(eq(ledgerEntries.userId, userId), eq(ledgerEntries.assetNetworkId, assetNetworkId)));
+      const currentBalance = Number(balRow?.total ?? 0);
+      const nextBalance = currentBalance + amount;
+      if (!Number.isFinite(nextBalance) || nextBalance < 0) {
+        res.status(400).json({ error: "Adjustment would make the balance negative", code: "VALIDATION_FAILED" });
+        return;
+      }
+
+      let depositId: string | null = null;
+      let receiptNo: string | null = null;
+      if (amount > 0) {
+        receiptNo = makeReceiptNo("DPT");
+        const [deposit] = await db
+          .insert(deposits)
+          .values({
+            userId,
+            assetNetworkId,
+            amount: String(amount),
+            txHash: `manual_${randomUUID()}`,
+            fromAddress: null,
+            confirmations: 0,
+            status: "completed",
+            externalId: `manual:${randomUUID()}`,
+            receiptNo,
+          })
+          .returning({ id: deposits.id });
+        depositId = deposit?.id ?? null;
+      }
+
+      const [entry] = await db
+        .insert(ledgerEntries)
+        .values({
+          userId,
+          assetNetworkId,
+          amount: String(amount),
+          balanceAfter: String(nextBalance),
+          type: amount > 0 ? "deposit" : "adjustment",
+          refType: amount > 0 ? "deposit" : "admin_adjustment",
+          refId: depositId,
+          description: note || (amount > 0 ? "Admin credited deposit" : "Admin balance adjustment"),
+        })
+        .returning({ id: ledgerEntries.id, createdAt: ledgerEntries.createdAt });
+
+      await db
+        .insert(walletAccounts)
+        .values({ userId, assetNetworkId, status: "active" })
+        .onConflictDoNothing();
+
+      res.json({
+        ok: true,
+        userId,
+        assetSymbol,
+        chainSlug,
+        amount,
+        balance: nextBalance,
+        receiptNo,
+        ledgerEntryId: entry?.id ?? null,
+        createdAt: entry?.createdAt?.toISOString() ?? new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("Admin balance adjustment failed:", err);
+      res.status(500).json({ error: "Failed to update balance", code: "SERVER_ERROR" });
+    }
+  }
+);
+
 // --- Admin Wallets (MVP) ---
 
 router.get(
@@ -1816,4 +2044,3 @@ router.patch(
 );
 
 export default router;
-

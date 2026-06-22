@@ -15,6 +15,7 @@ export interface AuthUser {
   id: string;
   email: string;
   name?: string;
+  promotionCode?: string | null;
   emailVerified?: boolean;
   kycStatus?: string;
   role?: string;
@@ -146,7 +147,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  async register(body: { email: string; password: string; name: string; confirmPassword: string }) {
+  async register(body: { email: string; password: string; name: string; confirmPassword: string; promotionCode?: string }) {
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/auth/register`, {

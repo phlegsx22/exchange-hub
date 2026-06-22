@@ -1,0 +1,22 @@
+[Unit]
+Description=Exchange Hub Backend API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=exchangehub
+Group=exchangehub
+WorkingDirectory=/opt/exchange-hub/backend
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/opt/exchange-hub/backend/.env
+ExecStart=/usr/bin/env node dist/index.js
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=15
+SyslogIdentifier=exchange-hub-backend
+
+[Install]
+WantedBy=multi-user.target

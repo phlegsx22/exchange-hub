@@ -18,7 +18,7 @@ const stats = [
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "", promotionCode: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -30,6 +30,7 @@ export default function Register() {
       email: form.email,
       password: form.password,
       confirm: form.confirm,
+      promotionCode: form.promotionCode,
     });
     if (!parsed.success) {
       const next: Record<string, string> = {};
@@ -48,6 +49,7 @@ export default function Register() {
         password: parsed.data.password,
         name: parsed.data.name,
         confirmPassword: parsed.data.confirm,
+        promotionCode: parsed.data.promotionCode,
       });
       navigate(`/verify-email?email=${encodeURIComponent(parsed.data.email)}`, { replace: true });
     } catch (err: unknown) {
@@ -143,6 +145,10 @@ export default function Register() {
               <Label htmlFor="confirm">Confirm Password</Label>
               <Input id="confirm" type="password" placeholder="••••••••" value={form.confirm} onChange={(e) => setForm({ ...form, confirm: e.target.value })} required />
               {errors.confirm && <p className="text-xs text-destructive">{errors.confirm}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="promotionCode">Promotion Code <span className="text-muted-foreground">(optional)</span></Label>
+              <Input id="promotionCode" placeholder="Enter promo code" value={form.promotionCode} onChange={(e) => setForm({ ...form, promotionCode: e.target.value })} />
             </div>
             <div className="flex items-start gap-2">
               <Checkbox id="terms" required />

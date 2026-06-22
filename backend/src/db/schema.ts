@@ -48,6 +48,7 @@ export const users = pgTable(
     email: varchar("email", { length: 255 }).notNull().unique(),
     passwordHash: varchar("password_hash", { length: 255 }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
+    promotionCode: varchar("promotion_code", { length: 64 }),
     role: userRoleEnum("role").notNull().default("user"),
     accountStatus: accountStatusEnum("account_status").notNull().default("active"),
     emailVerified: boolean("email_verified").notNull().default(false),

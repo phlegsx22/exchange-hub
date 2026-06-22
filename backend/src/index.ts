@@ -10,7 +10,6 @@ import walletsRoutes from "./routes/wallets.js";
 import activityRoutes from "./routes/activity.js";
 import tradeRoutes from "./routes/trade.js";
 import { startPriceFeed } from "./services/priceFeed.js";
-import { startDepositPoller } from "./services/depositPoller.js";
 
 const app = express();
 const PORT = process.env.PORT ?? process.env.API_PORT ?? process.env.SERVER_PORT ?? 3000;
@@ -61,16 +60,13 @@ app.get("/health", (_req, res) => {
 });
 
 let stopPriceFeed: (() => void) | null = null;
-let stopDepositPoller: (() => void) | null = null;
 let server: Server | null = null;
 let shuttingDown = false;
 
 function shutdown(): void {
   if (shuttingDown) return;
   shuttingDown = true;
-  stopDepositPoller?.();
   stopPriceFeed?.();
-  stopDepositPoller = null;
   stopPriceFeed = null;
 
   const forceExitMs = Number(process.env.SHUTDOWN_FORCE_EXIT_MS ?? 8000);
@@ -100,7 +96,7 @@ server = app.listen(PORT, () => {
   setTimeout(() => {
     try {
       stopPriceFeed = startPriceFeed();
-      stopDepositPoller = startDepositPoller();
+      console.log("[balances] admin-managed ledger mode enabled");
     } catch (err) {
       console.error("Background service bootstrap failed:", err);
     }
